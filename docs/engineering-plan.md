@@ -207,7 +207,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: Architecture review — column-scoped staff writes; Outside voice — unpinned search_path is a privilege-escalation vector
   - Files: `supabase/migrations/`
   - Verify: staff RPC calls succeed; direct table UPDATE from staff role is denied; `pg_get_functiondef` confirms search_path is set on every SECURITY DEFINER function
-- [ ] **T4 (P1, human: ~1.5-2.5h / CC: ~15min)** — triggers — Write `notify_order_created`, `notify_status_changed` (OLD/NEW estado diff), `notify_price_assigned` (batched per order, not per item) triggers, all firing via `pg_net`'s async HTTP queue
+- [x] **T4 (P1, human: ~1.5-2.5h / CC: ~15min)** — triggers — Write `notify_order_created`, `notify_status_changed` (OLD/NEW estado diff), `notify_price_assigned` (batched per order, not per item) triggers, all firing via `pg_net`'s async HTTP queue
   - Surfaced by: Architecture review — email trigger design; Outside voice — AFTER-trigger transactional semantics need an explicit async mechanism, per-item email batching gap
   - Files: `supabase/migrations/`
   - Verify: editing comentarios does not fire an email; changing estado does, exactly once; pricing 3 pending items on one order sends exactly one price-assigned email; Resend latency does not add measurable latency to the triggering write (pg_net queues async)
