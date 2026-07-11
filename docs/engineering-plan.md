@@ -203,7 +203,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: Architecture review — staff write scope, RLS as launch success criterion
   - Files: `supabase/migrations/`
   - Verify: RLS test suite (Test Plan artifact) — one allowed + one denied case per role/table
-- [ ] **T3 (P1, human: ~2h / CC: ~15min)** — RPCs — Write `advance_order_status`, `add_order_note`, `flag_problem`, `assign_item_price`, `log_manual_order` as security-definer functions, each with `SET search_path = public, pg_temp` pinned
+- [x] **T3 (P1, human: ~2h / CC: ~15min)** — RPCs — Write `advance_order_status`, `add_order_note`, `flag_problem`, `assign_item_price`, `log_manual_order` as security-definer functions, each with `SET search_path = public, pg_temp` pinned
   - Surfaced by: Architecture review — column-scoped staff writes; Outside voice — unpinned search_path is a privilege-escalation vector
   - Files: `supabase/migrations/`
   - Verify: staff RPC calls succeed; direct table UPDATE from staff role is denied; `pg_get_functiondef` confirms search_path is set on every SECURITY DEFINER function
