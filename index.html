@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Norðurljós Laundry — Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1C2531; --ink-soft:#4A5568; --steam:#F1EEE7; --card:#FFFFFF; --line:#E4E0D6;
+    --teal:#2F8F86; --teal-dark:#1F6B63; --sand:#EFE5CE; --clay:#C2703D;
+    --queue:#94A0AA; --accepted:#2F8F86; --progress:#C2703D; --ready:#3B6FC4; --delivered:#3F8A5C;
+    --danger:#C24949; --radius:16px;
+    --shadow-sm: 0 1px 2px rgba(28,37,49,.06), 0 1px 1px rgba(28,37,49,.04);
+    --shadow-md: 0 4px 14px rgba(28,37,49,.08), 0 1px 3px rgba(28,37,49,.06);
+    --shadow-lg: 0 12px 32px rgba(28,37,49,.14), 0 2px 6px rgba(28,37,49,.08);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--steam);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,.display{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.015em;}
+  #app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--steam);display:flex;flex-direction:column;position:relative;box-shadow:var(--shadow-lg);}
+
+  .topbar{padding:16px 18px 12px;display:flex;align-items:center;justify-content:space-between;background:var(--card);position:sticky;top:0;z-index:20;gap:6px;flex-wrap:wrap;box-shadow:var(--shadow-sm);}
+  .brand{display:flex;flex-direction:column;line-height:1.05;}
+  .brand .name{font-size:18px;font-weight:700;letter-spacing:-0.02em;}
+  .brand .tag{font-size:9.5px;color:#8a929e;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;font-weight:600;}
+  .topbar-right{display:flex;align-items:center;gap:6px;}
+  .lang-switch{display:flex;background:var(--steam);border:1px solid var(--line);border-radius:999px;padding:3px;font-size:11px;}
+  .lang-switch button{border:none;background:transparent;padding:5px 9px;border-radius:999px;font-family:inherit;font-weight:700;color:#8a929e;cursor:pointer;transition:all .15s;}
+  .lang-switch button.active{background:var(--ink);color:#fff;box-shadow:var(--shadow-sm);}
+  .mode-switch{display:flex;background:var(--steam);border:1px solid var(--line);border-radius:999px;padding:3px;font-size:10.5px;}
+  .mode-switch button{border:none;background:transparent;padding:6px 8px;border-radius:999px;font-family:inherit;font-weight:600;color:#8a929e;cursor:pointer;white-space:nowrap;transition:all .15s;}
+  .mode-switch button.active{background:var(--ink);color:#fff;box-shadow:var(--shadow-sm);}
+
+  .auth-screen{padding:28px 26px 40px;display:flex;flex-direction:column;gap:14px;flex:1;}
+  .auth-hero{margin-bottom:2px;}
+  .auth-hero .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--teal-dark);font-weight:700;margin-bottom:8px;}
+  .auth-hero h1{font-size:26px;margin:0 0 6px;}
+  .auth-hero p{margin:0;color:#4A5568;font-size:14px;line-height:1.5;}
+  label{font-size:12px;font-weight:600;color:#565f68;display:block;margin-bottom:6px;}
+  input,select,textarea{width:100%;padding:12px 13px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);font-family:inherit;font-size:15px;color:var(--ink);transition:border-color .15s, box-shadow .15s;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(62,142,136,.15);}
+  .field{margin-bottom:14px;}
+  .btn{border:none;border-radius:10px;padding:13px 16px;font-family:inherit;font-weight:700;font-size:14.5px;cursor:pointer;text-align:center;}
+  .btn-primary{background:var(--ink);color:#fff;box-shadow:var(--shadow-sm);}
+  .btn-teal{background:var(--teal);color:#fff;}
+  .btn-clay{background:var(--clay);color:#fff;}
+  .btn-ghost{background:transparent;color:var(--ink);text-decoration:underline;font-weight:600;padding:8px;}
+  .btn-sm{padding:9px 12px;font-size:12.5px;}
+  .switch-link{font-size:13px;color:#4A5568;text-align:center;margin-top:6px;}
+  .switch-link a{color:var(--teal-dark);font-weight:600;cursor:pointer;text-decoration:none;}
+
+  .content{flex:1;padding:16px 18px 100px;overflow-y:auto;}
+  .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:#8a929e;font-weight:700;margin:20px 0 10px;}
+  .section-title:first-child{margin-top:2px;}
+  .subsection-title{font-size:13px;font-weight:700;margin:18px 0 8px;color:var(--ink);}
+
+  .order-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 17px;margin-bottom:12px;box-shadow:var(--shadow-sm);}
+  .order-card .row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .order-card .oid{font-size:11px;color:#96a0a8;font-weight:600;}
+  .order-card h3{font-size:16px;margin:2px 0 4px;}
+  .order-card .meta{font-size:12.5px;color:#4A5568;margin:0;}
+  .order-card .comment{font-size:12.5px;color:#4A5568;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-style:italic;}
+  .badge{font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:999px;white-space:nowrap;color:#fff;letter-spacing:.02em;text-transform:uppercase;}
+  .badge.en-cola{background:var(--queue);}
+  .badge.aceptado{background:var(--accepted);}
+  .badge.en-proceso{background:var(--progress);}
+  .badge.listo{background:var(--ready);}
+  .badge.entregado{background:var(--delivered);}
+  .badge-mini{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;color:#fff;margin-right:5px;display:inline-block;}
+  .badge-mini.urgent{background:var(--clay);}
+  .badge-mini.delivery{background:#3E6FBF;}
+  .badge-mini.pickup{background:#6B5B95;}
+  .badge-mini.problem{background:var(--danger);}
+  .badge-row{margin-bottom:4px;}
+
+  .price-line{display:flex;justify-content:space-between;font-size:12.5px;color:#4A5568;padding:3px 0;}
+  .price-line .amount{font-weight:600;color:var(--ink);}
+  .price-line.pending .amount{color:var(--clay);font-style:italic;font-weight:600;}
+  .price-total{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:14px;font-weight:700;}
+  .price-total .amount{font-family:'Fraunces',serif;font-size:16px;}
+  .price-block{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+
+  .pipeline{display:flex;align-items:center;margin:12px 0 4px;position:relative;}
+  .pipeline::before{content:"";position:absolute;left:8px;right:8px;top:5px;height:1.5px;background:var(--line);}
+  .pin{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1;}
+  .pin .dot{width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid var(--line);margin-bottom:5px;}
+  .pin.done .dot{background:var(--teal);border-color:var(--teal);}
+  .pin.current .dot{background:var(--clay);border-color:var(--clay);box-shadow:0 0 0 4px rgba(194,112,61,.18);}
+  .pin span.label{font-size:9px;color:#8a949c;text-align:center;font-weight:600;}
+  .pin.done span.label,.pin.current span.label{color:var(--ink);}
+
+  .fab{position:sticky;bottom:16px;align-self:center;margin:14px auto 0;width:calc(100% - 36px);}
+  .fab .btn{width:100%;padding:15px;font-size:15px;}
+
+  .bottomnav{display:flex;background:var(--card);position:sticky;bottom:0;box-shadow:0 -2px 12px rgba(28,37,49,.07);}
+  .bottomnav button{flex:1;border:none;background:transparent;padding:11px 4px 9px;font-family:inherit;font-size:10.5px;font-weight:600;color:#8a929e;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;}
+  .bottomnav button.active{color:var(--ink);}
+  .bottomnav button .ic{font-size:16px;}
+
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(20,26,31,.45);z-index:40;display:none;}
+  .sheet-backdrop.open{display:block;}
+  .sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:480px;background:var(--steam);border-radius:22px 22px 0 0;z-index:41;max-height:90vh;overflow-y:auto;padding:20px 20px 30px;display:none;box-shadow:0 -8px 40px rgba(28,37,49,.22);}
+  .sheet.open{display:block;}
+  .sheet-handle{width:38px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 14px;}
+  .sheet h2{font-size:20px;margin:0 0 4px;}
+  .sheet .sub{font-size:13px;color:#4A5568;margin:0 0 18px;}
+  .item-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+  .item-row select{flex:2;min-width:120px;}
+  .item-row input.qty-input{flex:0 0 62px;}
+  .item-row input.other-input{flex:2 1 100%;order:3;}
+  .item-row button{border:none;background:var(--card);border:1px solid var(--line);border-radius:8px;width:36px;height:44px;color:var(--danger);font-size:16px;cursor:pointer;}
+  .item-price-hint{font-size:11px;color:#8a929e;margin:-2px 0 10px 2px;}
+  .item-price-hint.pending{color:var(--clay);font-weight:600;}
+  .add-item{background:none;border:1px dashed var(--line);color:var(--teal-dark);border-radius:10px;padding:10px;width:100%;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:16px;}
+
+  .checkbox-row{display:flex;align-items:center;gap:9px;margin-bottom:10px;font-size:13.5px;font-weight:600;color:#444e57;}
+  .checkbox-row input{width:auto;accent-color:var(--teal);}
+  .checkbox-row .fee{margin-left:auto;font-size:11.5px;color:#8a929e;font-weight:600;}
+
+  .order-total-preview{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+  .order-total-preview .row{display:flex;justify-content:space-between;font-size:13px;color:#4A5568;padding:3px 0;}
+  .order-total-preview .row.total{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;font-weight:700;font-size:15px;color:var(--ink);}
+  .order-total-preview .note{font-size:11px;color:var(--clay);margin-top:4px;font-weight:600;}
+
+  .staff-tabs{display:flex;gap:3px;margin-bottom:16px;background:#E9E5DA;border-radius:12px;padding:4px;overflow-x:auto;}
+  .staff-tabs button{flex:1;border:none;background:transparent;padding:9px 3px;border-radius:9px;font-family:inherit;font-weight:700;font-size:10.5px;color:#6b7280;cursor:pointer;white-space:nowrap;transition:all .15s;}
+  .staff-tabs button.active{background:var(--card);color:var(--ink);box-shadow:var(--shadow-sm);}
+
+  .filters{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;}
+  .filters button{flex:none;border:1px solid var(--line);background:var(--card);padding:7px 13px;border-radius:999px;font-size:12px;font-weight:600;color:#4A5568;cursor:pointer;white-space:nowrap;}
+  .filters button.active{background:var(--ink);color:#fff;border-color:var(--ink);box-shadow:var(--shadow-sm);}
+  .client-select-row{margin-bottom:14px;}
+
+  .staff-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  .staff-actions button{flex:1;min-width:100px;border:none;border-radius:9px;padding:9px 8px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;color:#fff;}
+  .staff-note-input{margin-top:10px;display:flex;gap:6px;}
+  .staff-note-input input{flex:1;font-size:13px;padding:9px 10px;}
+  .staff-note-input button{border:none;background:var(--ink);color:#fff;border-radius:8px;padding:0 14px;font-weight:700;font-size:12px;cursor:pointer;}
+
+  .client-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:var(--shadow-sm);}
+  .client-info h3{font-size:15px;margin:0 0 3px;}
+  .client-info p{font-size:12px;color:#4A5568;margin:0;}
+  .client-stat{text-align:center;min-width:52px;}
+  .client-stat .num{font-size:18px;font-weight:700;font-family:'Fraunces',serif;}
+  .client-stat .lbl{font-size:9.5px;color:#8a929e;text-transform:uppercase;letter-spacing:.05em;}
+  .client-view-btn{border:1px solid var(--line);background:var(--card);color:var(--teal-dark);border-radius:8px;padding:8px 11px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+
+  .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .kpi-grid.cols4{grid-template-columns:1fr 1fr 1fr 1fr;}
+  .kpi-grid.cols3{grid-template-columns:1fr 1fr 1fr;}
+  .kpi-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow-sm);}
+  .kpi-card .kpi-num{font-size:21px;font-weight:700;font-family:'Fraunces',serif;letter-spacing:-0.01em;}
+  .kpi-grid.cols4 .kpi-num{font-size:15px;}
+  .kpi-card .kpi-lbl{font-size:10px;color:#8a929e;font-weight:700;margin-top:3px;text-transform:uppercase;letter-spacing:.03em;}
+  .chart-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
+  .chart-card h3{font-size:14px;margin:0 0 3px;}
+  .chart-card .chart-sub{font-size:11.5px;color:#8a929e;margin:0 0 12px;}
+
+  .today-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
+  .today-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px;cursor:pointer;text-align:left;font-family:inherit;box-shadow:var(--shadow-sm);transition:transform .12s, box-shadow .12s;}
+  .today-card:active{transform:scale(0.98);}
+  .today-card .n{font-size:22px;font-weight:700;font-family:'Fraunces',serif;}
+  .today-card .l{font-size:10.5px;color:#8a929e;font-weight:600;margin-top:2px;}
+  .today-card.alert{border-color:var(--danger);background:#FBF2F2;}
+  .today-card.alert .n{color:var(--danger);}
+  .today-card.warn{border-color:var(--clay);background:#FBF3EC;}
+  .today-card.warn .n{color:var(--clay);}
+
+  .quick-chip{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:10px;}
+  .quick-chip button{background:none;border:none;color:#fff;cursor:pointer;font-weight:700;font-size:13px;}
+
+  .alert-list-item{background:#FBF2F2;border:1px solid var(--danger);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;color:#7a3a3a;}
+  .alert-list-item b{color:var(--ink);}
+  .alert-list-item.warn{background:#FBF3EC;border-color:var(--clay);color:#6b4726;}
+
+  .empty-state{text-align:center;padding:60px 20px;color:#8a929e;}
+  .empty-state .glyph{font-size:34px;margin-bottom:10px;}
+  .empty-state h3{color:var(--ink);font-size:16px;margin:0 0 6px;}
+  .empty-state p{font-size:13px;margin:0;line-height:1.5;}
+
+  .email-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-sm);}
+  .email-card .email-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .email-card .email-to{font-size:12px;font-weight:700;color:var(--teal-dark);}
+  .email-card .email-time{font-size:10.5px;color:#8a929e;}
+  .email-card .email-subject{font-size:14px;font-weight:600;margin:2px 0 4px;}
+  .email-card .email-body{font-size:12px;color:#4A5568;line-height:1.5;white-space:pre-line;}
+  .email-sent-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:var(--teal);padding:2px 8px;border-radius:999px;margin-top:6px;}
+  .notif-banner{background:var(--sand);border:1px solid #d9cba7;border-radius:10px;padding:10px 12px;font-size:11.5px;color:#6b5a2f;margin-bottom:14px;line-height:1.4;}
+
+  .product-row{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px;box-shadow:var(--shadow-sm);}
+  .product-row.inactive{opacity:.5;}
+  .product-row .pname{flex:1;min-width:0;}
+  .product-row .pname .en{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .product-row .pname .is{font-size:11px;color:#8a929e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .product-row .pprice{font-size:12.5px;font-weight:700;white-space:nowrap;}
+  .product-row .pbtns{display:flex;gap:4px;flex-shrink:0;}
+  .icon-btn{border:1px solid var(--line);background:var(--card);border-radius:7px;width:29px;height:29px;font-size:12px;cursor:pointer;color:var(--ink);flex-shrink:0;}
+  .icon-btn.danger{color:var(--danger);}
+  .product-edit-form{background:var(--card);border:1.5px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:10px;}
+  .form-row2{display:flex;gap:8px;}
+  .form-row2 .field{flex:1;}
+  .admin-banner{background:#EAF1F0;border:1px solid #bcd6d3;border-radius:10px;padding:10px 12px;font-size:11.5px;color:#2c5450;margin-bottom:14px;line-height:1.4;}
+
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:60;opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;max-width:88%;text-align:center;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+
+  ::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ CATEGORÍAS ============ */
+const CATEGORIES = {
+  bedding:{en:"Bedding", is:"Rúmfatnaður"},
+  apparel:{en:"Apparel", is:"Fatnaður"},
+  general:{en:"General", is:"Almennt"},
+  other:{en:"Other", is:"Annað"}
+};
+
+/* ============ I18N ============ */
+const I18N = {
+  en: {
+    brand_name:"Norðurljós", brand_tag:"Laundry & Dry Cleaning",
+    tab_cliente:"Client", tab_staff:"Staff", tab_admin:"Admin",
+    welcome_back:"Welcome back", login_title:"Sign in to your account",
+    login_sub:"Track your garments and place new orders in seconds.",
+    phone:"Phone", pass:"Password", btn_login:"Sign in", btn_staff_login:"Sign in as staff", btn_admin_login:"Sign in as admin",
+    no_account:"Don't have an account?", signup:"Sign up", demo_hint:"Demo — use anna.bjork@example.is / 1234",
+    first_time:"First time here", register_title:"Create your account",
+    register_sub:"Register to place orders and track their status live.",
+    full_name:"Full name", create_pass:"Create a password", btn_create_account:"Create account",
+    have_account:"Already have an account?", login_link:"Sign in",
+    hello:"Hi", empty_orders_title:"No orders yet", empty_orders_sub:"Create your first order with the button below.",
+    new_order:"+ New order", my_orders:"My orders", logout:"Log out",
+    requested_delivery:"Requested delivery", new_order_title:"New order", new_order_sub:"Tell us what you need washed and by when.",
+    items_services:"Garments / services", add_item:"+ Add another garment", req_date:"Requested date",
+    comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
+    opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
+    return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
+    service_disabled:"Not offered right now",
+    tab_active:"Active", tab_history:"History", no_history_title:"No past orders yet", no_history_sub:"Delivered orders will show up here.",
+    submit_order:"Submit order", cancel:"Cancel",
+    err_phone_pass:"Incorrect phone or password", err_fill_all:"Please fill in all fields",
+    err_phone_exists:"That phone number is already registered", err_pick_date:"Please select a requested date",
+    err_other_desc:"Please describe the \"Other\" item(s)",
+    order_sent:"Order submitted — confirmation emailed ✓", order_updated:"Order updated — client emailed", note_added:"Note added",
+    note_sent:"Note sent to client by email", issue_resolved:"Issue marked as resolved",
+    staff_panel:"Staff panel", admin_panel:"Admin panel",
+    tab_today:"Today", orders_tab:"Orders", clients_tab:"Clients", reports_tab:"Reports", emails_tab:"Emails",
+    tab_products:"Products", tab_pricing:"Pricing",
+    all:"All", client_label:"Client:", all_clients:"All clients",
+    no_orders_filter:"No orders here", no_orders_filter_sub:"There are no orders matching this filter yet.",
+    client_says:"Client", advance_to:"Advance to", flag_issue:"Flag issue", resolve_issue:"Resolve issue",
+    note_ph:"Add a note for the client...", send:"Send",
+    orders_count:"orders", view_orders:"View orders",
+    no_clients_title:"No clients yet", no_clients_sub:"Clients will appear here once they register.",
+    est_total:"Estimated total", quote_pending_item:"quote pending",
+    quote_pending_note:"Some items need a price confirmation before the final total.",
+    order_total:"Order total", pending_items_note:"+ items pending quote",
+    subtotal:"Items subtotal", express_fee:"Express fee", delivery_fee:"Delivery fee", pickup_fee:"Pickup fee", discount:"Discount",
+    notif_intro:"This is a simulation of the emails your client would receive. In production these are sent automatically via N8N + a transactional email provider (e.g. Resend) whenever an order is created or its status changes.",
+    no_emails_title:"No emails yet", no_emails_sub:"Emails will appear here as orders are created or updated.",
+    email_subj_new:"Your order {id} has been received", email_subj_status:"Update on your order {id}: {status}",
+    email_body_new:"Hi {name},\n\nWe've received your order {id}.\n\nItems:\n{items}\n\nEstimated total: {total}\nRequested delivery: {date}\n\nWe'll notify you by email as your order progresses.\n\n— Norðurljós Laundry",
+    email_body_status:"Hi {name},\n\nYour order {id} is now: {status}.\n\n{note}\n\n— Norðurljós Laundry",
+    problem_note:"⚠ There is an issue with this order, looking into it.", resolved_note:"✓ The issue has been resolved.",
+    status_updated_note:"Status updated to", received_note:"Received and sorted.", delivered_note:"Delivered at front desk.",
+    status:{"en-cola":"Queued","aceptado":"Accepted","en-proceso":"In progress","listo":"Ready","entregado":"Delivered"},
+
+    today_due:"Due today", today_received:"Received today", today_overdue:"Overdue", today_urgent:"Urgent",
+    today_problems:"Problems", today_progress:"In progress", today_ready:"Ready",
+    clear_filter:"Clear filter", filtered_by:"Filtered:",
+
+    admin_intro:"Manage your catalog, pricing and view business reports — no code required.",
+    add_product:"+ Add product", product_name_en:"Name (English)", product_name_is:"Name (Icelandic)",
+    product_price:"Price (ISK)", product_unit:"Unit", product_category:"Category", product_active:"Available to clients",
+    unit_pc:"per piece", unit_kg:"per kg", unit_set:"per set",
+    save:"Save", edit:"Edit", delete:"Delete", confirm_delete:"Delete this product? This can't be undone.",
+    cannot_delete_used:"This product is used in existing orders. Deactivate it instead of deleting.",
+    move_up:"Move up", move_down:"Move down", inactive_tag:"Inactive",
+    product_added:"Product added", product_updated:"Product updated", product_deleted:"Product deleted",
+    err_product_fields:"Please fill in name and price",
+
+    pricing_intro:"These fees apply automatically to every new order.",
+    price_express:"Express / urgent surcharge (%)", price_delivery:"Home delivery fee (ISK)",
+    price_pickup:"Pickup fee (ISK)", price_discount:"Standing discount (%)",
+    pricing_saved:"Pricing updated",
+
+    rep_sales:"Sales", rep_today:"Today", rep_week:"This week", rep_month:"This month", rep_year:"This year",
+    rep_orders:"Orders", rep_total_orders:"Total orders", rep_avg_day:"Avg / day", rep_avg_week:"Avg / week",
+    rep_avg_ticket:"Average ticket", rep_avg_ticket_sub:"Average amount spent per order",
+    rep_customers:"Customers", rep_new:"New (30d)", rep_recurring:"Recurring", rep_lost:"Lost (30d+)", rep_frequent:"Most frequent",
+    rep_top_services:"Top services", rep_top_services_sub:"By quantity ordered",
+    rep_revenue_cat:"Revenue by category", rep_revenue_cat_sub:"Which services generate the most revenue",
+    rep_peak_hours:"Peak hours", rep_peak_hours_sub:"When orders come in",
+    rep_production:"Production status", rep_production_sub:"Garments currently in each stage",
+    rep_productivity:"Productivity", rep_productivity_sub:"Average time from received to delivered",
+    rep_avg_turnaround:"Avg. turnaround", rep_no_data:"Not enough delivered orders yet",
+    rep_alerts:"Alerts", rep_alerts_sub:"Needs attention now",
+    rep_no_alerts:"No alerts — everything is on track",
+    alert_overdue:"Overdue", alert_urgent:"Urgent, not yet delivered", alert_problem:"Open issue", alert_waiting:"Waiting 24h+ in queue",
+    hrs:"hrs",
+
+    tab_quotes:"Quotes", quotes_intro:"These orders have \"Other\" items with no price yet. Assign a price so the client sees the correct total.",
+    no_quotes_title:"No pending quotes", no_quotes_sub:"All \"Other\" items have a price assigned.",
+    assign_price:"Assign price (ISK)", save_price:"Save price", price_assigned:"Price assigned — client notified",
+    quote_confirmed_note:"Good news — we've confirmed the price for the item(s) you described. Your order total is now final.",
+
+    enable_delivery:"Offer home delivery", enable_pickup:"Offer home pickup (collect dirty laundry)",
+
+    log_order:"+ Log order", manual_order_title:"Log an order", manual_order_sub:"For walk-in or contract clients — no client login needed.",
+    manual_badge:"MANUAL", select_existing_client:"Existing client", or_type_name:"Or type a client / location name",
+    walkin_client_ph:"E.g. Hotel Húsavík — Reception", err_manual_client:"Select a client or type a name",
+    manual_order_logged:"Order logged",
+
+    rep_revenue_client:"Revenue by client", rep_revenue_client_sub:"Useful to reconcile against contract paperwork",
+
+    register_client:"+ Register client", register_client_title:"Register a new client", client_phone_ph:"555-0199",
+    client_temp_pass:"Temporary password", client_temp_pass_hint:"Share this with the client so they can log in",
+    client_registered:"Client registered",
+
+    email:"Email", err_email_pass:"Incorrect email or password", err_email_exists:"That email is already registered",
+    customize:"Customize", customize_client_title:"Customize client", notifications_enabled:"Send email notifications",
+    notifications_off_hint:"Orders are still logged normally — the client just won't get emails.",
+    contract_client:"Contract client (multi-location account)",
+    reset_password:"Reset password", new_temp_password:"New temporary password", client_updated:"Client updated",
+    password_reset_note:"Password reset. New temporary password:",
+
+    contract_dashboard_title:"Contract clients — today", contract_dashboard_sub:"Garments processed today, by account",
+    no_contract_activity:"No contract client activity today", items_processed:"garments"
+  },
+  is: {
+    brand_name:"Norðurljós", brand_tag:"Þvottahús og fatahreinsun",
+    tab_cliente:"Viðskiptavinur", tab_staff:"Starfsfólk", tab_admin:"Stjórnandi",
+    welcome_back:"Velkomin/n aftur", login_title:"Skráðu þig inn",
+    login_sub:"Fylgstu með fötunum þínum og gerðu nýjar pantanir á sekúndum.",
+    phone:"Sími", pass:"Lykilorð", btn_login:"Skrá inn", btn_staff_login:"Skrá inn sem starfsmaður", btn_admin_login:"Skrá inn sem stjórnandi",
+    no_account:"Ertu ekki með aðgang?", signup:"Nýskrá", demo_hint:"Sýnishorn — notaðu anna.bjork@example.is / 1234",
+    first_time:"Fyrsta heimsókn", register_title:"Stofnaðu aðgang",
+    register_sub:"Skráðu þig til að gera pantanir og fylgjast með stöðu þeirra.",
+    full_name:"Fullt nafn", create_pass:"Búðu til lykilorð", btn_create_account:"Stofna aðgang",
+    have_account:"Ertu þegar með aðgang?", login_link:"Skrá inn",
+    hello:"Hæ", empty_orders_title:"Engar pantanir ennþá", empty_orders_sub:"Gerðu fyrstu pöntunina með hnappinum fyrir neðan.",
+    new_order:"+ Ný pöntun", my_orders:"Pantanirnar mínar", logout:"Útskrá",
+    requested_delivery:"Óskuð afhending", new_order_title:"Ný pöntun", new_order_sub:"Segðu okkur hvað þarf að þvo og hvenær.",
+    items_services:"Flíkur / þjónusta", add_item:"+ Bæta við flík", req_date:"Óskuð dagsetning",
+    comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
+    opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
+    return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
+    service_disabled:"Ekki í boði núna",
+    tab_active:"Virkar", tab_history:"Fyrri pantanir", no_history_title:"Engar fyrri pantanir ennþá", no_history_sub:"Afhentar pantanir birtast hér.",
+    submit_order:"Senda pöntun", cancel:"Hætta við",
+    err_phone_pass:"Rangt símanúmer eða lykilorð", err_fill_all:"Vinsamlegast fylltu út alla reiti",
+    err_phone_exists:"Þetta símanúmer er þegar skráð", err_pick_date:"Veldu óskaða dagsetningu",
+    err_other_desc:"Vinsamlegast lýstu \"Annað\" hlutnum",
+    order_sent:"Pöntun send — staðfesting send í tölvupósti ✓", order_updated:"Pöntun uppfærð — tölvupóstur sendur", note_added:"Athugasemd bætt við",
+    note_sent:"Athugasemd send í tölvupósti", issue_resolved:"Vandamál merkt leyst",
+    staff_panel:"Stjórnborð starfsfólks", admin_panel:"Stjórnendaborð",
+    tab_today:"Í dag", orders_tab:"Pantanir", clients_tab:"Viðskiptavinir", reports_tab:"Skýrslur", emails_tab:"Tölvupóstar",
+    tab_products:"Vörur", tab_pricing:"Verðskrá",
+    all:"Allt", client_label:"Viðskiptavinur:", all_clients:"Allir viðskiptavinir",
+    no_orders_filter:"Engar pantanir hér", no_orders_filter_sub:"Engar pantanir passa við þessa síu ennþá.",
+    client_says:"Viðskiptavinur", advance_to:"Færa í", flag_issue:"Merkja vandamál", resolve_issue:"Merkja leyst",
+    note_ph:"Bæta við athugasemd fyrir viðskiptavin...", send:"Senda",
+    orders_count:"pantanir", view_orders:"Skoða pantanir",
+    no_clients_title:"Engir viðskiptavinir ennþá", no_clients_sub:"Viðskiptavinir birtast hér þegar þeir skrá sig.",
+    est_total:"Áætlað heildarverð", quote_pending_item:"verð óstaðfest",
+    quote_pending_note:"Sum atriði þurfa staðfestingu á verði áður en heildarupphæð er endanleg.",
+    order_total:"Heildarverð pöntunar", pending_items_note:"+ atriði bíða verðs",
+    subtotal:"Samtals vörur", express_fee:"Hraðþjónustugjald", delivery_fee:"Sendingargjald", pickup_fee:"Sækja-gjald", discount:"Afsláttur",
+    notif_intro:"Þetta er hermun á tölvupóstum sem viðskiptavinurinn þinn myndi fá. Í framleiðslu eru þeir sendir sjálfvirkt með N8N + tölvupóstþjónustu (t.d. Resend) þegar pöntun er búin til eða staða breytist.",
+    no_emails_title:"Engir tölvupóstar ennþá", no_emails_sub:"Tölvupóstar birtast hér þegar pantanir eru búnar til eða uppfærðar.",
+    email_subj_new:"Pöntun þín {id} hefur verið móttekin", email_subj_status:"Uppfærsla á pöntun {id}: {status}",
+    email_body_new:"Hæ {name},\n\nVið höfum móttekið pöntun þína {id}.\n\nAtriði:\n{items}\n\nÁætlað heildarverð: {total}\nÓskuð afhending: {date}\n\nVið látum þig vita í tölvupósti eftir því sem pöntunin þróast.\n\n— Norðurljós þvottahús",
+    email_body_status:"Hæ {name},\n\nPöntun þín {id} er núna: {status}.\n\n{note}\n\n— Norðurljós þvottahús",
+    problem_note:"⚠ Það er vandamál með þessa pöntun, skoðum það.", resolved_note:"✓ Vandamálið hefur verið leyst.",
+    status_updated_note:"Staða uppfærð í", received_note:"Móttekið og flokkað.", delivered_note:"Afhent í móttöku.",
+    status:{"en-cola":"Í röð","aceptado":"Samþykkt","en-proceso":"Í vinnslu","listo":"Tilbúið","entregado":"Afhent"},
+
+    today_due:"Á að afhenda í dag", today_received:"Móttekið í dag", today_overdue:"Á eftir áætlun", today_urgent:"Áríðandi",
+    today_problems:"Vandamál", today_progress:"Í vinnslu", today_ready:"Tilbúið",
+    clear_filter:"Hreinsa síu", filtered_by:"Síað eftir:",
+
+    admin_intro:"Sýslaðu með vörulista, verð og skoðaðu rekstrarskýrslur — engin kóðun nauðsynleg.",
+    add_product:"+ Bæta við vöru", product_name_en:"Nafn (enska)", product_name_is:"Nafn (íslenska)",
+    product_price:"Verð (ISK)", product_unit:"Eining", product_category:"Flokkur", product_active:"Sýnilegt viðskiptavinum",
+    unit_pc:"per stykki", unit_kg:"per kg", unit_set:"per sett",
+    save:"Vista", edit:"Breyta", delete:"Eyða", confirm_delete:"Eyða þessari vöru? Ekki hægt að afturkalla.",
+    cannot_delete_used:"Þessi vara er notuð í pöntunum. Gerðu hana óvirka í staðinn fyrir að eyða.",
+    move_up:"Færa upp", move_down:"Færa niður", inactive_tag:"Óvirk",
+    product_added:"Vöru bætt við", product_updated:"Vara uppfærð", product_deleted:"Vöru eytt",
+    err_product_fields:"Vinsamlegast fylltu út nafn og verð",
+
+    pricing_intro:"Þessi gjöld gilda sjálfkrafa á allar nýjar pantanir.",
+    price_express:"Hraðþjónustuálag (%)", price_delivery:"Heimsendingargjald (ISK)",
+    price_pickup:"Sækja-gjald (ISK)", price_discount:"Fastur afsláttur (%)",
+    pricing_saved:"Verðskrá uppfærð",
+
+    rep_sales:"Sala", rep_today:"Í dag", rep_week:"Þessa viku", rep_month:"Þennan mánuð", rep_year:"Þetta ár",
+    rep_orders:"Pantanir", rep_total_orders:"Pantanir alls", rep_avg_day:"Meðaltal / dag", rep_avg_week:"Meðaltal / viku",
+    rep_avg_ticket:"Meðalpöntun", rep_avg_ticket_sub:"Meðalupphæð á pöntun",
+    rep_customers:"Viðskiptavinir", rep_new:"Nýir (30d)", rep_recurring:"Endurteknir", rep_lost:"Tapaðir (30d+)", rep_frequent:"Mest tíðir",
+    rep_top_services:"Vinsælustu þjónustur", rep_top_services_sub:"Eftir pöntuðu magni",
+    rep_revenue_cat:"Tekjur eftir flokki", rep_revenue_cat_sub:"Hvaða þjónusta skilar mestum tekjum",
+    rep_peak_hours:"Álagstímar", rep_peak_hours_sub:"Hvenær pantanir berast",
+    rep_production:"Staða framleiðslu", rep_production_sub:"Flíkur í hverju stigi núna",
+    rep_productivity:"Afköst", rep_productivity_sub:"Meðaltími frá móttöku til afhendingar",
+    rep_avg_turnaround:"Meðal afgreiðslutími", rep_no_data:"Ekki nógu margar afhentar pantanir ennþá",
+    rep_alerts:"Viðvaranir", rep_alerts_sub:"Þarfnast athygli núna",
+    rep_no_alerts:"Engar viðvaranir — allt gengur vel",
+    alert_overdue:"Á eftir áætlun", alert_urgent:"Áríðandi, ekki enn afhent", alert_problem:"Opið vandamál", alert_waiting:"Beðið 24 klst+ í röð",
+    hrs:"klst",
+
+    tab_quotes:"Verðtilboð", quotes_intro:"Þessar pantanir hafa \"Annað\" atriði án verðs. Settu verð svo viðskiptavinurinn sjái rétta heildarupphæð.",
+    no_quotes_title:"Engin verðtilboð í bið", no_quotes_sub:"Öll \"Annað\" atriði hafa fengið verð.",
+    assign_price:"Setja verð (ISK)", save_price:"Vista verð", price_assigned:"Verð sett — viðskiptavinur látinn vita",
+    quote_confirmed_note:"Góðar fréttir — við höfum staðfest verð fyrir atriðin sem þú lýstir. Heildarverð pöntunarinnar er nú endanlegt.",
+
+    enable_delivery:"Bjóða heimsendingu", enable_pickup:"Bjóða að sækja óhrein föt heim",
+
+    log_order:"+ Skrá pöntun", manual_order_title:"Skrá pöntun", manual_order_sub:"Fyrir viðskiptavini án aðgangs eða samningsviðskiptavini.",
+    manual_badge:"HANDVIRKT", select_existing_client:"Núverandi viðskiptavinur", or_type_name:"Eða skrifaðu nafn viðskiptavinar / staðsetningar",
+    walkin_client_ph:"T.d. Hótel Húsavík — Móttaka", err_manual_client:"Veldu viðskiptavin eða skrifaðu nafn",
+    manual_order_logged:"Pöntun skráð",
+
+    rep_revenue_client:"Tekjur eftir viðskiptavini", rep_revenue_client_sub:"Gagnlegt til að stemma af á móti pappírsskráningu",
+
+    register_client:"+ Skrá viðskiptavin", register_client_title:"Skrá nýjan viðskiptavin", client_phone_ph:"555-0199",
+    client_temp_pass:"Tímabundið lykilorð", client_temp_pass_hint:"Deildu þessu með viðskiptavininum svo hann geti skráð sig inn",
+    client_registered:"Viðskiptavinur skráður",
+
+    email:"Netfang", err_email_pass:"Rangt netfang eða lykilorð", err_email_exists:"Þetta netfang er þegar skráð",
+    customize:"Sérstilla", customize_client_title:"Sérstilla viðskiptavin", notifications_enabled:"Senda tölvupóstsnotkun",
+    notifications_off_hint:"Pantanir eru samt skráðar eðlilega — viðskiptavinurinn fær bara ekki tölvupóst.",
+    contract_client:"Samningsviðskiptavinur (fleiri staðsetningar)",
+    reset_password:"Endurstilla lykilorð", new_temp_password:"Nýtt tímabundið lykilorð", client_updated:"Viðskiptavinur uppfærður",
+    password_reset_note:"Lykilorð endurstillt. Nýtt tímabundið lykilorð:",
+
+    contract_dashboard_title:"Samningsviðskiptavinir — í dag", contract_dashboard_sub:"Flíkur unnar í dag, eftir aðgangi",
+    no_contract_activity:"Engin virkni samningsviðskiptavina í dag", items_processed:"flíkur"
+  }
+};
+let lang = 'en';
+function t(key){ return I18N[lang][key] ?? key; }
+
+/* ============ ESTADO Y PERSISTENCIA ============ */
+const DB_KEY = 'norduljos_lavanderia_v4';
+const ESTADOS = ["en-cola","aceptado","en-proceso","listo","entregado"];
+function statusLabel(e){ return t('status')[e]; }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function isToday(ts){ return new Date(ts).toDateString() === new Date().toDateString(); }
+function isOverdue(o){ return o.fecha < todayISO() && o.estado !== 'entregado'; }
+
+function priceEntry(key){ return db.products.find(p=>p.key===key) || db.products.find(p=>p.key==='other'); }
+function activeProducts(){ return [...db.products].filter(p=>p.active).sort((a,b)=>a.sortOrder-b.sortOrder); }
+function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }
+
+function computeItemCost(it){
+  if(it.priceOverride!=null) return it.priceOverride * it.cant;
+  const p = priceEntry(it.tipo);
+  if(p.price === null) return null;
+  return p.price * it.cant;
+}
+function computeOrderTotals(items, mods){
+  mods = mods || {};
+  let itemsTotal = 0, hasPending = false;
+  items.forEach(it=>{ const c = computeItemCost(it); if(c===null) hasPending=true; else itemsTotal+=c; });
+  const expressFee = mods.urgent ? Math.round(itemsTotal * (db.settings.expressPercent/100)) : 0;
+  const deliveryFee = mods.returnMethod==='delivery' ? db.settings.deliveryFee : 0;
+  const pickupFee = mods.pickup ? db.settings.pickupFee : 0;
+  const discount = db.settings.discountPercent ? Math.round(itemsTotal * (db.settings.discountPercent/100)) : 0;
+  const total = Math.max(0, itemsTotal + expressFee + deliveryFee + pickupFee - discount);
+  return {itemsTotal, expressFee, deliveryFee, pickupFee, discount, total, hasPending};
+}
+
+function loadDB(){
+  const raw = localStorage.getItem(DB_KEY);
+  if(raw) return JSON.parse(raw);
+  const now = Date.now(); const day = 86400000;
+  const seed = {
+    users: [
+      {id:"u1", name:"Anna Björk", email:"anna.bjork@example.is", phone:"555-0110", pass:"1234", registeredAt: now-day*40, notificationsEnabled:true, isContract:false},
+      {id:"u2", name:"Karl Sigurdsson", email:"karl.sig@example.is", phone:"555-0142", pass:"1234", registeredAt: now-day*25, notificationsEnabled:true, isContract:false},
+      {id:"u3", name:"Sofía Rúnarsdóttir", email:"sofia.run@example.is", phone:"555-0177", pass:"1234", registeredAt: now-day*5, notificationsEnabled:false, isContract:false},
+      {id:"u4", name:"Hótel Húsavík", email:"reception@hotelhusavik.is", phone:"555-0201", pass:"1234", registeredAt: now-day*60, notificationsEnabled:true, isContract:true}
+    ],
+    products: [
+      {id:"bedsheets", key:"bedsheets", en:"Bed sheets (set)", is:"Rúmföt (sett)", price:2500, unit:"set", category:"bedding", active:true, sortOrder:0},
+      {id:"pillowcase", key:"pillowcase", en:"Pillow case", is:"Koddaver", price:1000, unit:"pc", category:"bedding", active:true, sortOrder:1},
+      {id:"duvetcover", key:"duvetcover", en:"Duvet cover", is:"Sængurver", price:1800, unit:"pc", category:"bedding", active:true, sortOrder:2},
+      {id:"towel", key:"towel", en:"Towel", is:"Handklæði", price:800, unit:"pc", category:"general", active:true, sortOrder:3},
+      {id:"shirt", key:"shirt", en:"Shirt", is:"Skyrta", price:900, unit:"pc", category:"apparel", active:true, sortOrder:4},
+      {id:"trousers", key:"trousers", en:"Trousers", is:"Buxur", price:1200, unit:"pc", category:"apparel", active:true, sortOrder:5},
+      {id:"jacket", key:"jacket", en:"Jacket", is:"Jakki", price:2200, unit:"pc", category:"apparel", active:true, sortOrder:6},
+      {id:"dress", key:"dress", en:"Dress", is:"Kjóll", price:1900, unit:"pc", category:"apparel", active:true, sortOrder:7},
+      {id:"generalkg", key:"generalkg", en:"General laundry (kg)", is:"Almennur þvottur (kg)", price:700, unit:"kg", category:"general", active:true, sortOrder:8},
+      {id:"other", key:"other", en:"Other (describe)", is:"Annað (lýstu)", price:null, unit:"pc", category:"other", active:true, sortOrder:9}
+    ],
+    settings: { expressPercent:50, deliveryFee:1500, pickupFee:1000, discountPercent:0, deliveryEnabled:true, pickupEnabled:true },
+    orders: [
+      {id:"ORD-1042", userId:"u1", clientName:"Anna Björk", items:[{tipo:"shirt",cant:5,priceOverride:null},{tipo:"trousers",cant:2,priceOverride:null}], fecha:"2026-07-10", comentarios:"Please no starch on the shirts.", estado:"en-proceso", urgent:true, returnMethod:"store", pickup:false, problem:false, source:"client", notas:["received_note"], creado: now-day*1.2, deliveredAt:null},
+      {id:"ORD-1041", userId:"u1", clientName:"Anna Björk", items:[{tipo:"duvetcover",cant:1,priceOverride:null}], fecha:"2026-07-08", comentarios:"", estado:"entregado", urgent:false, returnMethod:"delivery", pickup:false, problem:false, source:"client", notas:["delivered_note"], creado: now-day*3, deliveredAt: now-day*1},
+      {id:"ORD-1040", userId:"u2", clientName:"Karl Sigurdsson", items:[{tipo:"generalkg",cant:6,priceOverride:null}], fecha:"2026-07-09", comentarios:"", estado:"aceptado", urgent:false, returnMethod:"store", pickup:true, problem:false, source:"client", notas:[], creado: now-day*2, deliveredAt:null},
+      {id:"ORD-1039", userId:"u2", clientName:"Karl Sigurdsson", items:[{tipo:"towel",cant:3,priceOverride:null}], fecha:"2026-07-06", comentarios:"", estado:"entregado", urgent:false, returnMethod:"store", pickup:false, problem:false, source:"client", notas:["delivered_note"], creado: now-day*5, deliveredAt: now-day*3.5},
+      {id:"ORD-1038", userId:"u3", clientName:"Sofía Rúnarsdóttir", items:[{tipo:"dress",cant:1,priceOverride:null},{tipo:"jacket",cant:1,priceOverride:null}], fecha:todayISOOffset(now,1), comentarios:"Dry clean only please.", estado:"en-cola", urgent:false, returnMethod:"store", pickup:false, problem:true, source:"client", notas:["__problem__"], creado: now-day*0.4, deliveredAt:null},
+      {id:"ORD-1037", userId:"u3", clientName:"Sofía Rúnarsdóttir", items:[{tipo:"bedsheets",cant:2,priceOverride:null}], fecha:"2026-07-04", comentarios:"", estado:"entregado", urgent:false, returnMethod:"store", pickup:false, problem:false, source:"client", notas:["delivered_note"], creado: now-day*7, deliveredAt: now-day*5.2},
+      {id:"ORD-1036", userId:"u1", clientName:"Anna Björk", items:[{tipo:"shirt",cant:3,priceOverride:null}], fecha:todayISOOffset(now,-2), comentarios:"", estado:"listo", urgent:false, returnMethod:"store", pickup:false, problem:false, source:"client", notas:[], creado: now-day*9, deliveredAt:null},
+      {id:"ORD-1035", userId:"u4", clientName:"Hótel Húsavík", items:[{tipo:"bedsheets",cant:14,priceOverride:null},{tipo:"towel",cant:20,priceOverride:null},{tipo:"other",cant:1,desc:"3 bathrobes, dry clean",priceOverride:4500}], fecha:todayISOOffset(now,0), comentarios:"Weekly contract pickup.", estado:"en-proceso", urgent:false, returnMethod:"delivery", pickup:true, problem:false, source:"staff", notas:["received_note"], creado: now-day*0.8, deliveredAt:null},
+      {id:"ORD-1034", userId:"u4", clientName:"Hótel Húsavík", items:[{tipo:"bedsheets",cant:8,priceOverride:null},{tipo:"pillowcase",cant:16,priceOverride:null}], fecha:todayISOOffset(now,0), comentarios:"", estado:"en-cola", urgent:false, returnMethod:"delivery", pickup:true, problem:false, source:"staff", notas:[], creado: now-day*0.1, deliveredAt:null}
+    ],
+    emailLog: []
+  };
+  localStorage.setItem(DB_KEY, JSON.stringify(seed));
+  return seed;
+}
+function todayISOOffset(now,d){ return new Date(now + d*86400000).toISOString().slice(0,10); }
+function saveDB(db){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+let db = loadDB();
+if(!db.emailLog) db.emailLog = [];
+
+let session = { role:null, userId:null };
+let viewMode = 'cliente';
+let staffTab = 'today';
+let adminTab = 'reports';
+let staffFilter = 'todos';
+let staffClientFilter = 'todos';
+let staffQuickFilter = null;
+let authScreen = 'login';
+let sheetOpen = false;
+let sheetMode = 'client'; // 'client' | 'manual'
+let orderDraftItems = [];
+let orderDraftMods = {urgent:false, returnMethod:'store', pickup:false};
+let orderDraftManualClientId = '';
+let orderDraftManualName = '';
+let editingProductId = null;
+let addingProduct = false;
+let addingClient = false;
+let editingClientId = null;
+let clientSubTab = 'active'; // 'active' | 'history'
+let quotePriceDrafts = {};
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2200);
+}
+function noteText(n){
+  if(n === 'received_note' || n === 'delivered_note' || n === '__problem__' || n === '__resolved__'){
+    if(n==='__problem__') return t('problem_note');
+    if(n==='__resolved__') return t('resolved_note');
+    return t(n);
+  }
+  if(n && n.startsWith('__status__:')) return t('status_updated_note')+' "'+statusLabel(n.split(':')[1])+'".';
+  return n;
+}
+
+/* ---- Simulated email sending (production: N8N + Resend/SendGrid) ---- */
+function itemsToText(items){
+  return items.map(it=>{
+    const p = priceEntry(it.tipo);
+    const label = it.tipo==='other' ? (it.desc||'Other') : (p[lang]||p.en);
+    const cost = computeItemCost(it);
+    return `  • ${it.cant}× ${label} — ${cost===null? t('quote_pending_item') : fmtISK(cost)}`;
+  }).join('\n');
+}
+function sendEmail(user, subjectKey, bodyKey, vars){
+  const subject = t(subjectKey).replace(/{(\w+)}/g, (_,k)=>vars[k]??'');
+  const body = t(bodyKey).replace(/{(\w+)}/g, (_,k)=>vars[k]??'');
+  db.emailLog.unshift({ to: user ? (user.name+' <'+user.email+'>') : '—', subject, body, ts: Date.now() });
+  saveDB(db);
+}
+function notifyOrderCreated(user, order){
+  if(!user || user.notificationsEnabled===false) return;
+  const {total, hasPending} = computeOrderTotals(order.items, order);
+  sendEmail(user, 'email_subj_new', 'email_body_new', {
+    name:user.name, id:order.id, items:itemsToText(order.items),
+    total: fmtISK(total) + (hasPending ? ' ('+t('pending_items_note')+')' : ''), date: order.fecha
+  });
+}
+function notifyStatusChanged(user, order, note){
+  if(!user || user.notificationsEnabled===false) return;
+  sendEmail(user, 'email_subj_status', 'email_body_status', { name:user.name, id:order.id, status: statusLabel(order.estado), note: note || '' });
+}
+
+/* ============ RENDER ROOT ============ */
+function render(){
+  const app = document.getElementById('app');
+  if(!session.role){ app.innerHTML = renderTopbar() + renderAuth(); }
+  else if(session.role === 'cliente'){ app.innerHTML = renderTopbar() + renderClienteView() + renderSheet(); }
+  else if(session.role === 'staff'){ app.innerHTML = renderTopbar() + renderStaffView() + renderSheet(); }
+  else { app.innerHTML = renderTopbar() + renderAdminView() + renderSheet(); }
+  bindEvents();
+}
+function renderLangSwitch(){
+  return `<div class="lang-switch"><button data-lang="en" class="${lang==='en'?'active':''}">EN</button><button data-lang="is" class="${lang==='is'?'active':''}">IS</button></div>`;
+}
+function renderTopbar(){
+  const logo = `<svg width="34" height="34" viewBox="0 0 34 34" style="flex-shrink:0;">
+    <circle cx="17" cy="17" r="17" fill="#1C2531"/>
+    <path d="M4 19 C 9 11, 13 21, 18 13 C 23 5, 27 15, 31 10" stroke="#2F8F86" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.95"/>
+    <path d="M4 23 C 9 16, 13 24, 18 18 C 23 12, 27 20, 31 16" stroke="#C2703D" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.85"/>
+    <path d="M12.5 27.5 c0-3 4.5-8.5 4.5-8.5s4.5 5.5 4.5 8.5a4.5 4.5 0 0 1-9 0z" fill="#F1EEE7"/>
+  </svg>`;
+  return `
+  <div class="topbar">
+    <div class="brand" style="flex-direction:row;align-items:center;gap:9px;">
+      ${logo}
+      <div><div class="name">${t('brand_name')}</div><div class="tag">${t('brand_tag')}</div></div>
+    </div>
+    <div class="topbar-right">
+      ${session.role ? `
+      <div class="mode-switch">
+        <button data-switch="cliente" class="${viewMode==='cliente'?'active':''}">${t('tab_cliente')}</button>
+        <button data-switch="staff" class="${viewMode==='staff'?'active':''}">${t('tab_staff')}</button>
+        <button data-switch="admin" class="${viewMode==='admin'?'active':''}">${t('tab_admin')}</button>
+      </div>` : ``}
+      ${renderLangSwitch()}
+    </div>
+  </div>`;
+}
+
+/* ============ AUTH ============ */
+function renderAuth(){
+  if(authScreen === 'login'){
+    return `
+    <div class="auth-screen">
+      <div class="auth-hero"><div class="eyebrow">${t('welcome_back')}</div><h1>${t('login_title')}</h1><p>${t('login_sub')}</p></div>
+      <div class="field"><label>${t('email')}</label><input type="email" id="login-email" placeholder="anna.bjork@example.is"></div>
+      <div class="field"><label>${t('pass')}</label><input type="password" id="login-pass" placeholder="••••"></div>
+      <button class="btn btn-primary" id="btn-login">${t('btn_login')}</button>
+      <button class="btn btn-teal" id="btn-staff-login">${t('btn_staff_login')}</button>
+      <button class="btn btn-clay" id="btn-admin-login">${t('btn_admin_login')}</button>
+      <div class="switch-link">${t('no_account')} <a id="go-registro">${t('signup')}</a></div>
+      <div class="switch-link" style="margin-top:-4px;color:#a9b0b6;">${t('demo_hint')}</div>
+    </div>`;
+  }
+  return `
+  <div class="auth-screen">
+    <div class="auth-hero"><div class="eyebrow">${t('first_time')}</div><h1>${t('register_title')}</h1><p>${t('register_sub')}</p></div>
+    <div class="field"><label>${t('full_name')}</label><input id="reg-name" placeholder="Jón Jónsson"></div>
+    <div class="field"><label>${t('email')}</label><input id="reg-email" type="email" placeholder="jon@example.is"></div>
+    <div class="field"><label>${t('phone')}</label><input id="reg-phone" type="tel" placeholder="555-0199"></div>
+    <div class="field"><label>${t('pass')}</label><input id="reg-pass" type="password" placeholder="${t('create_pass')}"></div>
+    <button class="btn btn-primary" id="btn-registro">${t('btn_create_account')}</button>
+    <div class="switch-link">${t('have_account')} <a id="go-login">${t('login_link')}</a></div>
+  </div>`;
+}
+
+/* ============ CLIENTE ============ */
+function renderClienteView(){
+  const user = db.users.find(u=>u.id===session.userId);
+  const allOrdenes = db.orders.filter(o=>o.userId===session.userId).sort((a,b)=>b.creado-a.creado);
+  const activeOrdenes = allOrdenes.filter(o=>o.estado!=='entregado');
+  const historyOrdenes = allOrdenes.filter(o=>o.estado==='entregado');
+  const shown = clientSubTab==='active' ? activeOrdenes : historyOrdenes;
+  return `
+  <div class="content">
+    <div class="section-title">${t('hello')}, ${user ? user.name.split(' ')[0] : ''}</div>
+    <div class="staff-tabs">
+      <button data-clientsubtab="active" class="${clientSubTab==='active'?'active':''}">${t('tab_active')} (${activeOrdenes.length})</button>
+      <button data-clientsubtab="history" class="${clientSubTab==='history'?'active':''}">${t('tab_history')} (${historyOrdenes.length})</button>
+    </div>
+    ${shown.length === 0 ? `<div class="empty-state"><div class="glyph">${clientSubTab==='active'?'🧺':'📦'}</div><h3>${clientSubTab==='active'?t('empty_orders_title'):t('no_history_title')}</h3><p>${clientSubTab==='active'?t('empty_orders_sub'):t('no_history_sub')}</p></div>` : shown.map(renderOrderCardCliente).join('')}
+  </div>
+  <div class="fab"><button class="btn btn-primary" id="btn-nueva-orden">${t('new_order')}</button></div>
+  <div class="bottomnav">
+    <button class="active"><span class="ic">🧺</span>${t('my_orders')}</button>
+    <button id="btn-logout"><span class="ic">↩</span>${t('logout')}</button>
+  </div>`;
+}
+function pipelineHtml(estado){
+  const idx = ESTADOS.indexOf(estado);
+  return `<div class="pipeline">` + ESTADOS.map((e,i)=>{
+    let cls = i<idx?'done':(i===idx?'current':'');
+    return `<div class="pin ${cls}"><div class="dot"></div><span class="label">${statusLabel(e)}</span></div>`;
+  }).join('') + `</div>`;
+}
+function badgeRow(o){
+  let b = '';
+  if(o.urgent) b += `<span class="badge-mini urgent">${lang==='is'?'HRAÐ':'URGENT'}</span>`;
+  if(o.returnMethod==='delivery') b += `<span class="badge-mini delivery">${lang==='is'?'SENDING':'DELIVERY'}</span>`;
+  if(o.pickup) b += `<span class="badge-mini pickup">${lang==='is'?'SÆKJA':'PICKUP'}</span>`;
+  if(o.problem) b += `<span class="badge-mini problem">${lang==='is'?'VANDAMÁL':'ISSUE'}</span>`;
+  if(o.source==='staff') b += `<span class="badge-mini" style="background:#6B5B95;">${t('manual_badge')}</span>`;
+  return b ? `<div class="badge-row">${b}</div>` : '';
+}
+function priceBlockHtml(o){
+  const {itemsTotal, expressFee, deliveryFee, pickupFee, discount, total, hasPending} = computeOrderTotals(o.items, o);
+  const lines = o.items.map(it=>{
+    const p = priceEntry(it.tipo);
+    const label = it.tipo==='other' ? (it.desc || t('other_ph')) : (p[lang]||p.en);
+    const cost = computeItemCost(it);
+    return `<div class="price-line ${cost===null?'pending':''}"><span>${it.cant}× ${label}</span><span class="amount">${cost===null ? t('quote_pending_item') : fmtISK(cost)}</span></div>`;
+  }).join('');
+  const extraLines = [
+    expressFee>0 ? `<div class="price-line"><span>${t('express_fee')}</span><span class="amount">${fmtISK(expressFee)}</span></div>` : '',
+    deliveryFee>0 ? `<div class="price-line"><span>${t('delivery_fee')}</span><span class="amount">${fmtISK(deliveryFee)}</span></div>` : '',
+    pickupFee>0 ? `<div class="price-line"><span>${t('pickup_fee')}</span><span class="amount">${fmtISK(pickupFee)}</span></div>` : '',
+    discount>0 ? `<div class="price-line"><span>${t('discount')}</span><span class="amount">-${fmtISK(discount)}</span></div>` : ''
+  ].join('');
+  return `<div class="price-block">${lines}${extraLines}
+    <div class="price-total"><span>${t('order_total')}</span><span class="amount">${fmtISK(total)}${hasPending? ' +':''}</span></div>
+    ${hasPending ? `<div class="item-price-hint pending">${t('quote_pending_note')}</div>` : ''}
+  </div>`;
+}
+function renderOrderCardCliente(o){
+  const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+  const lastNote = o.notas[o.notas.length-1];
+  return `
+  <div class="order-card">
+    ${badgeRow(o)}
+    <div class="row-top"><div><div class="oid">${o.id}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
+    ${pipelineHtml(o.estado)}
+    ${priceBlockHtml(o)}
+    ${lastNote ? `<div class="comment">📝 ${noteText(lastNote)}</div>` : ``}
+  </div>`;
+}
+function fmtFecha(iso){ if(!iso) return '—'; const d = new Date(iso+'T00:00:00'); return d.toLocaleDateString(lang==='is'?'is-IS':'en-GB',{day:'2-digit',month:'short'}); }
+function fmtDateTime(ts){ const d = new Date(ts); const l = lang==='is'?'is-IS':'en-GB'; return d.toLocaleDateString(l,{day:'2-digit',month:'short'}) + ' · ' + d.toLocaleTimeString(l,{hour:'2-digit',minute:'2-digit'}); }
+
+/* ---- Sheet: nueva orden (cliente) o registro manual (staff/admin) ---- */
+function renderSheet(){
+  if(orderDraftItems.length===0) orderDraftItems=[{tipo:activeProducts()[0].key, cant:1, desc:''}];
+  const totals = computeOrderTotals(orderDraftItems, orderDraftMods);
+  const isManual = sheetMode==='manual';
+  const hidePrices = session.role==='staff';
+  return `
+  <div class="sheet-backdrop ${sheetOpen?'open':''}" id="sheet-backdrop"></div>
+  <div class="sheet ${sheetOpen?'open':''}" id="sheet">
+    <div class="sheet-handle"></div>
+    <h2>${isManual ? t('manual_order_title') : t('new_order_title')}</h2>
+    <p class="sub">${isManual ? t('manual_order_sub') : t('new_order_sub')}</p>
+
+    ${isManual ? `
+    <div class="field"><label>${t('select_existing_client')}</label>
+      <select id="manual-client-select">
+        <option value="">—</option>
+        ${db.users.map(u=>`<option value="${u.id}" ${orderDraftManualClientId===u.id?'selected':''}>${u.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field"><label>${t('or_type_name')}</label><input id="manual-client-name" value="${orderDraftManualName}" placeholder="${t('walkin_client_ph')}"></div>
+    ` : ''}
+
+    <label>${t('items_services')}</label>
+    ${orderDraftItems.map((it,i)=>{
+      const p = priceEntry(it.tipo);
+      const hint = hidePrices ? '' : (it.tipo==='other' ? `<div class="item-price-hint pending">${t('quote_pending_item')}</div>` : `<div class="item-price-hint">${fmtISK(p.price)} / ${p.unit} → ${fmtISK(p.price*it.cant)}</div>`);
+      return `
+      <div class="item-row">
+        <select data-item-tipo="${i}">${activeProducts().map(s=>`<option value="${s.key}" ${s.key===it.tipo?'selected':''}>${s[lang]||s.en}</option>`).join('')}</select>
+        <input type="number" min="1" class="qty-input" data-item-cant="${i}" value="${it.cant}">
+        ${it.tipo==='other' ? `<input type="text" class="other-input" data-item-desc="${i}" value="${it.desc||''}" placeholder="${t('other_ph')}">` : ''}
+        ${orderDraftItems.length>1 ? `<button data-remove-item="${i}">✕</button>`:''}
+      </div>${hint}`;
+    }).join('')}
+    <button class="add-item" id="add-item-btn">${t('add_item')}</button>
+
+    <label class="checkbox-row"><input type="checkbox" id="orden-urgent" ${orderDraftMods.urgent?'checked':''}> ${t('opt_urgent')} <span class="fee">+${db.settings.expressPercent}%</span></label>
+
+    <label>${t('return_method')}</label>
+    <label class="checkbox-row"><input type="radio" name="return-method" value="store" ${orderDraftMods.returnMethod==='store'?'checked':''}> ${t('opt_return_store')} <span class="fee">${lang==='is'?'ókeypis':'free'}</span></label>
+    <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${!db.settings.deliveryEnabled?'disabled':''}> ${t('opt_return_delivery')} <span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span></label>
+
+    ${db.settings.pickupEnabled ? `<label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>` : ''}
+
+    ${hidePrices ? '' : `
+    <div class="order-total-preview">
+      <div class="row"><span>${t('subtotal')}</span><span>${fmtISK(totals.itemsTotal)}</span></div>
+      ${totals.expressFee>0?`<div class="row"><span>${t('express_fee')}</span><span>${fmtISK(totals.expressFee)}</span></div>`:''}
+      ${totals.deliveryFee>0?`<div class="row"><span>${t('delivery_fee')}</span><span>${fmtISK(totals.deliveryFee)}</span></div>`:''}
+      ${totals.pickupFee>0?`<div class="row"><span>${t('pickup_fee')}</span><span>${fmtISK(totals.pickupFee)}</span></div>`:''}
+      ${totals.discount>0?`<div class="row"><span>${t('discount')}</span><span>-${fmtISK(totals.discount)}</span></div>`:''}
+      <div class="row total"><span>${t('est_total')}</span><span>${fmtISK(totals.total)}${totals.hasPending?' +':''}</span></div>
+      ${totals.hasPending ? `<div class="note">${t('quote_pending_note')}</div>` : ''}
+    </div>`}
+
+    <div class="field"><label>${t('req_date')}</label><input type="date" id="orden-fecha"></div>
+    <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}"></textarea></div>
+    <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${t('submit_order')}</button>
+    <button class="btn btn-ghost" id="btn-cancel-orden" style="width:100%;">${t('cancel')}</button>
+  </div>`;
+}
+
+/* ============ STAFF ============ */
+function renderStaffView(){
+  const tabs = ['today','orders','clients','reports','emails'];
+  const tabLabels = {today:t('tab_today'), orders:t('orders_tab'), clients:t('clients_tab'), reports:t('reports_tab'), emails:t('emails_tab')};
+  return `
+  <div class="content">
+    <div class="section-title">${t('staff_panel')}</div>
+    <div class="staff-tabs">${tabs.map(tb=>`<button data-stafftab="${tb}" class="${staffTab===tb?'active':''}">${tabLabels[tb]}</button>`).join('')}</div>
+    ${staffTab==='today' ? renderStaffToday() : staffTab==='orders' ? renderStaffOrders() : staffTab==='clients' ? renderStaffClients() : staffTab==='reports' ? renderReports() : renderStaffNotifications()}
+  </div>
+  <div class="bottomnav">
+    <button class="active"><span class="ic">📋</span>${t('staff_panel')}</button>
+    <button id="btn-logout"><span class="ic">↩</span>${t('logout')}</button>
+  </div>`;
+}
+
+function renderStaffToday(){
+  const orders = db.orders;
+  const dueToday = orders.filter(o=>o.fecha===todayISO() && o.estado!=='entregado');
+  const receivedToday = orders.filter(o=>isToday(o.creado));
+  const overdue = orders.filter(isOverdue);
+  const urgent = orders.filter(o=>o.urgent && o.estado!=='entregado');
+  const problems = orders.filter(o=>o.problem);
+  const inProgress = orders.filter(o=>o.estado==='en-proceso');
+  const ready = orders.filter(o=>o.estado==='listo');
+  const cards = [
+    {key:'due-today', n:dueToday.length, l:t('today_due'), cls:''},
+    {key:'received-today', n:receivedToday.length, l:t('today_received'), cls:''},
+    {key:'overdue', n:overdue.length, l:t('today_overdue'), cls:overdue.length?'alert':''},
+    {key:'urgent', n:urgent.length, l:t('today_urgent'), cls:urgent.length?'warn':''},
+    {key:'problems', n:problems.length, l:t('today_problems'), cls:problems.length?'alert':''},
+    {key:'in-progress', n:inProgress.length, l:t('today_progress'), cls:''},
+    {key:'ready', n:ready.length, l:t('today_ready'), cls:''}
+  ];
+  const contractUsers = db.users.filter(u=>u.isContract);
+  const contractToday = contractUsers.map(u=>{
+    const uOrders = db.orders.filter(o=>o.userId===u.id && isToday(o.creado));
+    const qty = uOrders.reduce((s,o)=>s+o.items.reduce((s2,it)=>s2+it.cant,0),0);
+    return {name:u.name, qty, orders:uOrders.length};
+  }).filter(c=>c.orders>0).sort((a,b)=>b.qty-a.qty);
+
+  return `<div class="today-grid">${cards.map(c=>`<button class="today-card ${c.cls}" data-quickfilter="${c.key}"><div class="n">${c.n}</div><div class="l">${c.l}</div></button>`).join('')}</div>
+  ${contractUsers.length ? `
+  <div class="subsection-title">${t('contract_dashboard_title')}</div>
+  <div class="chart-card">
+    <p class="chart-sub">${t('contract_dashboard_sub')}</p>
+    ${contractToday.length===0 ? `<p class="chart-sub">${t('no_contract_activity')}</p>` :
+      contractToday.map(c=>`
+      <div class="price-line"><span class="qty-name">${c.name}</span><span class="amount">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>
+    `).join('')}
+  </div>` : ''}`;
+}
+
+function renderStaffOrders(){
+  let ordenes = [...db.orders].sort((a,b)=>b.creado-a.creado);
+  if(staffFilter !== 'todos') ordenes = ordenes.filter(o=>o.estado===staffFilter);
+  if(staffClientFilter !== 'todos') ordenes = ordenes.filter(o=>o.userId===staffClientFilter);
+  if(staffQuickFilter){
+    const qf = staffQuickFilter;
+    if(qf==='due-today') ordenes = ordenes.filter(o=>o.fecha===todayISO() && o.estado!=='entregado');
+    else if(qf==='received-today') ordenes = ordenes.filter(o=>isToday(o.creado));
+    else if(qf==='overdue') ordenes = ordenes.filter(isOverdue);
+    else if(qf==='urgent') ordenes = ordenes.filter(o=>o.urgent && o.estado!=='entregado');
+    else if(qf==='problems') ordenes = ordenes.filter(o=>o.problem);
+    else if(qf==='in-progress') ordenes = ordenes.filter(o=>o.estado==='en-proceso');
+    else if(qf==='ready') ordenes = ordenes.filter(o=>o.estado==='listo');
+  }
+  const counts = {}; ESTADOS.forEach(e=>counts[e]=db.orders.filter(o=>o.estado===e).length);
+  const qfLabels = {'due-today':t('today_due'),'received-today':t('today_received'),'overdue':t('today_overdue'),'urgent':t('today_urgent'),'problems':t('today_problems'),'in-progress':t('today_progress'),'ready':t('today_ready')};
+  return `
+    <button class="add-item" id="btn-log-order" style="border-color:var(--teal-dark);color:var(--teal-dark);">${t('log_order')}</button>
+    ${staffQuickFilter ? `<div class="quick-chip">${t('filtered_by')} ${qfLabels[staffQuickFilter]}<button id="clear-quickfilter">✕</button></div>` : ''}
+    <div class="client-select-row">
+      <label>${t('client_label')}</label>
+      <select id="staff-client-filter">
+        <option value="todos" ${staffClientFilter==='todos'?'selected':''}>${t('all_clients')}</option>
+        ${db.users.map(u=>`<option value="${u.id}" ${staffClientFilter===u.id?'selected':''}>${u.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="filters">
+      <button data-filter="todos" class="${staffFilter==='todos'?'active':''}">${t('all')} (${db.orders.length})</button>
+      ${ESTADOS.map(e=>`<button data-filter="${e}" class="${staffFilter===e?'active':''}">${statusLabel(e)} (${counts[e]})</button>`).join('')}
+    </div>
+    ${ordenes.length===0 ? `<div class="empty-state"><div class="glyph">📋</div><h3>${t('no_orders_filter')}</h3><p>${t('no_orders_filter_sub')}</p></div>` : ordenes.map(renderOrderCardStaff).join('')}
+  `;
+}
+
+function renderOrderCardStaff(o){
+  const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+  const idx = ESTADOS.indexOf(o.estado);
+  const nextEstado = ESTADOS[idx+1];
+  return `
+  <div class="order-card">
+    ${badgeRow(o)}
+    <div class="row-top"><div><div class="oid">${o.id} · ${o.clientName}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
+    ${o.comentarios ? `<div class="comment">💬 ${t('client_says')}: "${o.comentarios}"</div>` : ``}
+    ${pipelineHtml(o.estado)}
+    ${session.role==='admin' ? priceBlockHtml(o) : ''}
+    <div class="staff-actions">
+      ${nextEstado ? `<button style="background:var(--ink)" data-advance="${o.id}">${t('advance_to')} ${statusLabel(nextEstado)}</button>` : ``}
+      ${!o.problem ? `<button style="background:var(--danger)" data-hold="${o.id}">${t('flag_issue')}</button>` : `<button style="background:var(--teal)" data-resolve="${o.id}">${t('resolve_issue')}</button>`}
+    </div>
+    <div class="staff-note-input"><input type="text" placeholder="${t('note_ph')}" data-note-input="${o.id}"><button data-note-submit="${o.id}">${t('send')}</button></div>
+  </div>`;
+}
+
+function clientAddFormHtml(){
+  return `
+  <div class="product-edit-form">
+    <div class="form-row2">
+      <div class="field"><label>${t('full_name')}</label><input id="cf-name" placeholder="Jón Jónsson"></div>
+      <div class="field"><label>${t('email')}</label><input id="cf-email" type="email" placeholder="jon@example.is"></div>
+    </div>
+    <div class="form-row2">
+      <div class="field"><label>${t('phone')}</label><input id="cf-phone" type="tel" placeholder="${t('client_phone_ph')}"></div>
+      <div class="field"><label>${t('client_temp_pass')}</label><input id="cf-pass" value="1234"></div>
+    </div>
+    <div class="item-price-hint" style="margin-bottom:10px;">${t('client_temp_pass_hint')}</div>
+    ${session.role==='admin' ? `<label class="checkbox-row"><input type="checkbox" id="cf-contract"> ${t('contract_client')}</label>` : ''}
+    <div class="staff-actions">
+      <button style="background:var(--teal)" id="cf-save">${t('save')}</button>
+      <button style="background:#8a929e" id="cf-cancel">${t('cancel')}</button>
+    </div>
+  </div>`;
+}
+function clientEditFormHtml(u){
+  return `
+  <div class="product-edit-form">
+    <div class="form-row2">
+      <div class="field"><label>${t('full_name')}</label><input id="ce-name" value="${u.name}"></div>
+      <div class="field"><label>${t('email')}</label><input id="ce-email" type="email" value="${u.email}"></div>
+    </div>
+    <div class="field"><label>${t('phone')}</label><input id="ce-phone" type="tel" value="${u.phone}"></div>
+    <label class="checkbox-row"><input type="checkbox" id="ce-notifications" ${u.notificationsEnabled!==false?'checked':''}> ${t('notifications_enabled')}</label>
+    <div class="item-price-hint" style="margin-bottom:10px;">${t('notifications_off_hint')}</div>
+    <label class="checkbox-row"><input type="checkbox" id="ce-contract" ${u.isContract?'checked':''}> ${t('contract_client')}</label>
+    <div class="staff-actions">
+      <button style="background:var(--teal)" id="ce-save" data-editing-client="${u.id}">${t('save')}</button>
+      <button style="background:var(--clay)" id="ce-reset-pass" data-reset-client="${u.id}">${t('reset_password')}</button>
+      <button style="background:#8a929e" id="ce-cancel">${t('cancel')}</button>
+    </div>
+  </div>`;
+}
+function renderStaffClients(){
+  const addBtn = !addingClient ? `<button class="add-item" id="btn-add-client">${t('register_client')}</button>` : clientAddFormHtml();
+  if(db.users.length===0) return addBtn + `<div class="empty-state"><div class="glyph">👥</div><h3>${t('no_clients_title')}</h3><p>${t('no_clients_sub')}</p></div>`;
+  return addBtn + db.users.map(u=>{
+    if(editingClientId===u.id) return clientEditFormHtml(u);
+    const orders = db.orders.filter(o=>o.userId===u.id);
+    const tags = [
+      u.isContract ? `<span class="badge-mini" style="background:#6B5B95;">${lang==='is'?'SAMNINGUR':'CONTRACT'}</span>` : '',
+      u.notificationsEnabled===false ? `<span class="badge-mini" style="background:#8a929e;">${lang==='is'?'HLJÓÐLAUS':'MUTED'}</span>` : ''
+    ].join('');
+    return `<div class="client-card">
+      <div class="client-info"><h3>${u.name}</h3><p>${u.email}</p>${tags?`<div class="badge-row" style="margin-top:4px;">${tags}</div>`:''}</div>
+      <div class="client-stat"><div class="num">${orders.length}</div><div class="lbl">${t('orders_count')}</div></div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <button class="client-view-btn" data-view-client="${u.id}">${t('view_orders')}</button>
+        ${session.role==='admin' ? `<button class="client-view-btn" data-customize-client="${u.id}">${t('customize')}</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderStaffNotifications(){
+  return `
+    <div class="notif-banner">✉️ ${t('notif_intro')}</div>
+    ${db.emailLog.length===0 ? `<div class="empty-state"><div class="glyph">✉️</div><h3>${t('no_emails_title')}</h3><p>${t('no_emails_sub')}</p></div>` :
+    db.emailLog.map(e=>`<div class="email-card"><div class="email-head"><span class="email-to">${e.to}</span><span class="email-time">${fmtDateTime(e.ts)}</span></div><div class="email-subject">${e.subject}</div><div class="email-body">${e.body}</div><div class="email-sent-tag">SENT</div></div>`).join('')}
+  `;
+}
+
+/* ---- Generic SVG horizontal bar chart ---- */
+function svgHBar(rows, opts){
+  opts = opts || {};
+  const w=320, barH=opts.barH||20, gap=opts.gap||14, leftPad=opts.leftPad||96, rightPad=10;
+  const trackW = w - leftPad - rightPad;
+  const max = Math.max(1, ...rows.map(r=>r.value));
+  const body = rows.map((r,i)=>{
+    const bw = trackW*(r.value/max); const y=i*(barH+gap);
+    const label = r.label.length>14 ? r.label.slice(0,13)+'…' : r.label;
+    const valueLabel = opts.fmt ? opts.fmt(r.value) : r.value;
+    return `<text x="0" y="${y+barH*0.68}" font-size="10.5" font-weight="600" fill="#4A5568" font-family="Inter,sans-serif">${label}</text>
+      <rect x="${leftPad}" y="${y}" width="${trackW}" height="${barH}" rx="6" fill="#F0EDE5"/>
+      <rect x="${leftPad}" y="${y}" width="${Math.max(bw, r.value>0?4:0)}" height="${barH}" rx="6" fill="${r.color||'#2F8F86'}"/>
+      <text x="${w-rightPad}" y="${y+barH*0.68}" text-anchor="end" font-size="10.5" font-weight="700" fill="#1C2531" font-family="Inter,sans-serif">${valueLabel}</text>`;
+  }).join('');
+  const totalH = rows.length*(barH+gap)-gap;
+  return `<svg viewBox="0 0 ${w} ${Math.max(totalH,barH)+4}" width="100%" style="overflow:visible">${body}</svg>`;
+}
+function svgVolumeLine(days){
+  const w=300,h=110,padL=4,padB=16;
+  const max = Math.max(1, ...days.map(d=>d.count));
+  const stepX = (w-padL*2)/(days.length-1);
+  const pts = days.map((d,i)=>{ const x=padL+i*stepX; const y=(h-padB)-((d.count/max)*(h-padB-10)); return {x,y,count:d.count,date:d.date}; });
+  const pathD = pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+  const areaD = pathD + ` L${pts[pts.length-1].x.toFixed(1)},${h-padB} L${pts[0].x.toFixed(1)},${h-padB} Z`;
+  const dots = pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.6" fill="#3E8E88"/>`).join('');
+  const labels = pts.map((p,i)=>{
+    if(i%3!==0 && i!==pts.length-1) return '';
+    const lbl = p.date.toLocaleDateString(lang==='is'?'is-IS':'en-GB',{day:'2-digit',month:'2-digit'});
+    return `<text x="${p.x.toFixed(1)}" y="${h}" font-size="8.5" fill="#8a929e" text-anchor="middle" font-family="Inter,sans-serif">${lbl}</text>`;
+  }).join('');
+  return `<svg viewBox="-16 0 ${w+32} ${h+6}" width="100%" style="overflow:visible"><path d="${areaD}" fill="rgba(47,143,134,.12)" stroke="none"/><path d="${pathD}" fill="none" stroke="#2F8F86" stroke-width="2"/>${dots}${labels}</svg>`;
+}
+const STATUS_COLOR = {"en-cola":"#9AA5AD","aceptado":"#3E8E88","en-proceso":"#C2703D","listo":"#3E6FBF","entregado":"#4E8B5C"};
+
+/* ---- Reports (shared by Staff & Admin) ---- */
+function computeReports(){
+  const now = new Date();
+  const startOfDay = new Date(now); startOfDay.setHours(0,0,0,0);
+  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfWeek.getDate()-startOfWeek.getDay());
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+  function ordersSince(d){ return db.orders.filter(o=>o.creado>=d.getTime()); }
+  function revenueOf(orders){ return orders.reduce((s,o)=>s+computeOrderTotals(o.items,o).total,0); }
+
+  const salesToday = revenueOf(ordersSince(startOfDay));
+  const salesWeek = revenueOf(ordersSince(startOfWeek));
+  const salesMonth = revenueOf(ordersSince(startOfMonth));
+  const salesYear = revenueOf(ordersSince(startOfYear));
+
+  const totalOrders = db.orders.length;
+  const firstOrderTs = totalOrders ? Math.min(...db.orders.map(o=>o.creado)) : Date.now();
+  const daysSinceFirst = Math.max(1, Math.ceil((Date.now()-firstOrderTs)/86400000));
+  const avgPerDay = (totalOrders/daysSinceFirst).toFixed(1);
+  const avgPerWeek = (totalOrders/(daysSinceFirst/7)).toFixed(1);
+  const avgTicket = totalOrders ? Math.round(revenueOf(db.orders)/totalOrders) : 0;
+
+  const byClient = {};
+  db.orders.forEach(o=>{ (byClient[o.userId]=byClient[o.userId]||[]).push(o); });
+  const newClients = db.users.filter(u=>(Date.now()-u.registeredAt) <= 30*86400000).length;
+  const recurringClients = Object.values(byClient).filter(arr=>arr.length>1).length;
+  const lostClients = Object.values(byClient).filter(arr=>(Date.now()-Math.max(...arr.map(o=>o.creado))) > 30*86400000).length;
+  const topClients = Object.entries(byClient).map(([uid,arr])=>({name:(db.users.find(u=>u.id===uid)||{}).name||uid, count:arr.length})).sort((a,b)=>b.count-a.count).slice(0,5);
+
+  const serviceQty = {}; const categoryRevenue = {};
+  db.orders.forEach(o=>{
+    o.items.forEach(it=>{
+      const p = priceEntry(it.tipo);
+      const label = it.tipo==='other' ? (lang==='is'?'Annað':'Other') : (p[lang]||p.en);
+      serviceQty[label] = (serviceQty[label]||0)+it.cant;
+      const cost = computeItemCost(it);
+      if(cost!==null) categoryRevenue[p.category] = (categoryRevenue[p.category]||0)+cost;
+    });
+  });
+  const topServices = Object.entries(serviceQty).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([label,value])=>({label,value}));
+  const catRows = Object.entries(categoryRevenue).sort((a,b)=>b[1]-a[1]).map(([cat,value])=>({label:(CATEGORIES[cat]||{})[lang]||cat, value}));
+
+  const hourBuckets = ["00–04","04–08","08–12","12–16","16–20","20–24"];
+  const hourCounts = new Array(6).fill(0);
+  db.orders.forEach(o=>{ hourCounts[Math.floor(new Date(o.creado).getHours()/4)]++; });
+  const peakRows = hourBuckets.map((b,i)=>({label:b, value:hourCounts[i]}));
+
+  const statusCounts = {}; ESTADOS.forEach(e=>statusCounts[e]=db.orders.filter(o=>o.estado===e).length);
+  const statusRows = ESTADOS.map(e=>({label:statusLabel(e), value:statusCounts[e], color:STATUS_COLOR[e]}));
+
+  const delivered = db.orders.filter(o=>o.deliveredAt);
+  const avgTurnaroundHrs = delivered.length ? (delivered.reduce((s,o)=>s+(o.deliveredAt-o.creado),0)/delivered.length/3600000).toFixed(1) : null;
+
+  const days = [];
+  for(let i=13;i>=0;i--){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-i); const count=db.orders.filter(o=>{const od=new Date(o.creado);od.setHours(0,0,0,0);return od.getTime()===d.getTime();}).length; days.push({date:d,count}); }
+
+  const revByClientName = {};
+  db.orders.forEach(o=>{ revByClientName[o.clientName] = (revByClientName[o.clientName]||0) + computeOrderTotals(o.items,o).total; });
+  const revenueByClient = Object.entries(revByClientName).map(([name,value])=>({label:name,value})).sort((a,b)=>b.value-a.value).slice(0,6);
+
+  const overdueList = db.orders.filter(isOverdue);
+  const urgentList = db.orders.filter(o=>o.urgent && o.estado!=='entregado');
+  const problemList = db.orders.filter(o=>o.problem);
+  const waitingList = db.orders.filter(o=>o.estado==='en-cola' && (Date.now()-o.creado)>24*3600000);
+
+  return {salesToday,salesWeek,salesMonth,salesYear,totalOrders,avgPerDay,avgPerWeek,avgTicket,
+    newClients,recurringClients,lostClients,topClients,topServices,catRows,peakRows,statusRows,
+    avgTurnaroundHrs,days,overdueList,urgentList,problemList,waitingList,revenueByClient};
+}
+
+function renderReports(){
+  const r = computeReports();
+  const showMoney = session.role === 'admin';
+  const alerts = [
+    ...r.overdueList.map(o=>({o, key:'alert_overdue'})),
+    ...r.urgentList.map(o=>({o, key:'alert_urgent'})),
+    ...r.problemList.map(o=>({o, key:'alert_problem'})),
+    ...r.waitingList.map(o=>({o, key:'alert_waiting'}))
+  ];
+  return `
+    ${showMoney ? `
+    <div class="subsection-title">${t('rep_sales')}</div>
+    <div class="kpi-grid cols4">
+      <div class="kpi-card"><div class="kpi-num">${fmtISK(r.salesToday)}</div><div class="kpi-lbl">${t('rep_today')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${fmtISK(r.salesWeek)}</div><div class="kpi-lbl">${t('rep_week')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${fmtISK(r.salesMonth)}</div><div class="kpi-lbl">${t('rep_month')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${fmtISK(r.salesYear)}</div><div class="kpi-lbl">${t('rep_year')}</div></div>
+    </div>` : ''}
+
+    <div class="subsection-title">${t('rep_orders')}</div>
+    <div class="kpi-grid ${showMoney?'':'cols3'}">
+      <div class="kpi-card"><div class="kpi-num">${r.totalOrders}</div><div class="kpi-lbl">${t('rep_total_orders')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${r.avgPerDay}</div><div class="kpi-lbl">${t('rep_avg_day')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${r.avgPerWeek}</div><div class="kpi-lbl">${t('rep_avg_week')}</div></div>
+      ${showMoney ? `<div class="kpi-card"><div class="kpi-num">${fmtISK(r.avgTicket)}</div><div class="kpi-lbl">${t('rep_avg_ticket')}</div></div>` : ''}
+    </div>
+
+    <div class="subsection-title">${t('rep_customers')}</div>
+    <div class="kpi-grid cols4">
+      <div class="kpi-card"><div class="kpi-num">${r.newClients}</div><div class="kpi-lbl">${t('rep_new')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${r.recurringClients}</div><div class="kpi-lbl">${t('rep_recurring')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${r.lostClients}</div><div class="kpi-lbl">${t('rep_lost')}</div></div>
+      <div class="kpi-card"><div class="kpi-num">${db.users.length}</div><div class="kpi-lbl">${t('rep_frequent')}</div></div>
+    </div>
+    ${r.topClients.length ? `<div class="chart-card">${svgHBar(r.topClients.map(c=>({label:c.name,value:c.count,color:'#C2703D'})))}</div>` : ''}
+
+    <div class="chart-card"><h3>${t('rep_top_services')}</h3><p class="chart-sub">${t('rep_top_services_sub')}</p>${r.topServices.length?svgHBar(r.topServices):`<p class="chart-sub">—</p>`}</div>
+    ${showMoney ? `
+    <div class="chart-card"><h3>${t('rep_revenue_client')}</h3><p class="chart-sub">${t('rep_revenue_client_sub')}</p>${r.revenueByClient.length?svgHBar(r.revenueByClient,{fmt:fmtISK,color:'#4E8B5C'}):`<p class="chart-sub">—</p>`}</div>
+    <div class="chart-card"><h3>${t('rep_revenue_cat')}</h3><p class="chart-sub">${t('rep_revenue_cat_sub')}</p>${r.catRows.length?svgHBar(r.catRows,{fmt:fmtISK,color:'#3E6FBF'}):`<p class="chart-sub">—</p>`}</div>
+    ` : ''}
+    <div class="chart-card"><h3>${t('rep_peak_hours')}</h3><p class="chart-sub">${t('rep_peak_hours_sub')}</p>${svgHBar(r.peakRows,{color:'#6B5B95'})}</div>
+    <div class="chart-card"><h3>${t('rep_production')}</h3><p class="chart-sub">${t('rep_production_sub')}</p>${svgHBar(r.statusRows)}</div>
+    <div class="chart-card"><h3>Orders — last 14 days</h3><p class="chart-sub"></p>${svgVolumeLine(r.days)}</div>
+
+    <div class="chart-card">
+      <h3>${t('rep_productivity')}</h3><p class="chart-sub">${t('rep_productivity_sub')}</p>
+      ${r.avgTurnaroundHrs ? `<div class="kpi-card" style="max-width:180px;"><div class="kpi-num">${r.avgTurnaroundHrs} ${t('hrs')}</div><div class="kpi-lbl">${t('rep_avg_turnaround')}</div></div>` : `<p class="chart-sub">${t('rep_no_data')}</p>`}
+    </div>
+
+    <div class="subsection-title">${t('rep_alerts')}</div>
+    ${alerts.length===0 ? `<div class="empty-state" style="padding:30px 20px;"><div class="glyph">✅</div><p>${t('rep_no_alerts')}</p></div>` :
+      alerts.map(a=>`<div class="alert-list-item ${a.key==='alert_urgent'?'warn':''}"><b>${a.o.id}</b> · ${a.o.clientName} — ${t(a.key)}</div>`).join('')}
+  `;
+}
+
+/* ============ ADMIN ============ */
+function renderAdminView(){
+  const tabs = ['reports','quotes','products','pricing','orders','clients'];
+  const pendingQuoteCount = db.orders.reduce((s,o)=>s+o.items.filter(it=>it.tipo==='other' && it.priceOverride==null).length,0);
+  const tabLabels = {reports:t('reports_tab'), quotes:t('tab_quotes')+(pendingQuoteCount?` (${pendingQuoteCount})`:''), products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab')};
+  return `
+  <div class="content">
+    <div class="section-title">${t('admin_panel')}</div>
+    <div class="staff-tabs">${tabs.map(tb=>`<button data-admintab="${tb}" class="${adminTab===tb?'active':''}">${tabLabels[tb]}</button>`).join('')}</div>
+    ${adminTab==='reports' ? `<div class="admin-banner">${t('admin_intro')}</div>${renderReports()}`
+      : adminTab==='quotes' ? renderAdminQuotes()
+      : adminTab==='products' ? renderAdminProducts()
+      : adminTab==='pricing' ? renderAdminPricing()
+      : adminTab==='orders' ? renderStaffOrders()
+      : renderStaffClients()}
+  </div>
+  <div class="bottomnav">
+    <button class="active"><span class="ic">🛠️</span>${t('admin_panel')}</button>
+    <button id="btn-logout"><span class="ic">↩</span>${t('logout')}</button>
+  </div>`;
+}
+
+function productEditFormHtml(p){
+  const isNew = !p;
+  const v = p || {en:'',is:'',price:'',unit:'pc',category:'general',active:true};
+  return `
+  <div class="product-edit-form">
+    <div class="form-row2">
+      <div class="field"><label>${t('product_name_en')}</label><input id="pf-en" value="${v.en}"></div>
+      <div class="field"><label>${t('product_name_is')}</label><input id="pf-is" value="${v.is}"></div>
+    </div>
+    <div class="form-row2">
+      <div class="field"><label>${t('product_price')}</label><input id="pf-price" type="number" min="0" value="${v.price===null?'':v.price}" placeholder="${lang==='is'?'Tómt = verð óstaðfest':'Blank = quote pending'}"></div>
+      <div class="field"><label>${t('product_unit')}</label>
+        <select id="pf-unit">
+          <option value="pc" ${v.unit==='pc'?'selected':''}>${t('unit_pc')}</option>
+          <option value="kg" ${v.unit==='kg'?'selected':''}>${t('unit_kg')}</option>
+          <option value="set" ${v.unit==='set'?'selected':''}>${t('unit_set')}</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>${t('product_category')}</label>
+      <select id="pf-category">${Object.entries(CATEGORIES).map(([k,c])=>`<option value="${k}" ${v.category===k?'selected':''}>${c[lang]}</option>`).join('')}</select>
+    </div>
+    <label class="checkbox-row"><input type="checkbox" id="pf-active" ${v.active!==false?'checked':''}> ${t('product_active')}</label>
+    <div class="staff-actions">
+      <button style="background:var(--teal)" id="pf-save" data-editing="${isNew?'new':p.id}">${t('save')}</button>
+      <button style="background:#8a929e" id="pf-cancel">${t('cancel')}</button>
+    </div>
+  </div>`;
+}
+function renderAdminProducts(){
+  const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
+  return `
+    <div class="admin-banner">${t('admin_intro')}</div>
+    ${!addingProduct ? `<button class="add-item" id="btn-add-product">${t('add_product')}</button>` : productEditFormHtml(null)}
+    ${products.map((p,i)=>{
+      if(editingProductId===p.id) return productEditFormHtml(p);
+      const usedInOrders = db.orders.some(o=>o.items.some(it=>it.tipo===p.key));
+      return `
+      <div class="product-row ${p.active?'':'inactive'}">
+        <div class="pname"><div class="en">${p.en}${!p.active?` · <span style="color:var(--danger)">${t('inactive_tag')}</span>`:''}</div><div class="is">${p.is}</div></div>
+        <div class="pprice">${p.price===null?t('quote_pending_item'):fmtISK(p.price)}</div>
+        <div class="pbtns">
+          <button class="icon-btn" data-move-up="${p.id}" title="${t('move_up')}" ${i===0?'disabled':''}>↑</button>
+          <button class="icon-btn" data-move-down="${p.id}" title="${t('move_down')}" ${i===products.length-1?'disabled':''}>↓</button>
+          <button class="icon-btn" data-toggle-active="${p.id}">${p.active?'👁':'🚫'}</button>
+          <button class="icon-btn" data-edit-product="${p.id}">✎</button>
+          ${p.key!=='other' && !usedInOrders ? `<button class="icon-btn danger" data-delete-product="${p.id}">🗑</button>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function renderAdminQuotes(){
+  const ordersWithPending = db.orders.filter(o=>o.items.some(it=>it.tipo==='other' && it.priceOverride==null));
+  if(ordersWithPending.length===0){
+    return `<div class="empty-state"><div class="glyph">✅</div><h3>${t('no_quotes_title')}</h3><p>${t('no_quotes_sub')}</p></div>`;
+  }
+  return `
+    <div class="admin-banner">${t('quotes_intro')}</div>
+    ${ordersWithPending.map(o=>{
+      const pendingItems = o.items.map((it,idx)=>({it,idx})).filter(x=>x.it.tipo==='other' && x.it.priceOverride==null);
+      return `
+      <div class="order-card">
+        <div class="row-top"><div><div class="oid">${o.id} · ${o.clientName}</div><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
+        ${pendingItems.map(x=>`
+          <div class="checkbox-row" style="align-items:flex-end;">
+            <div style="flex:1;">
+              <label>${x.it.cant}× "${x.it.desc||t('other_ph')}"</label>
+              <input type="number" min="0" placeholder="${t('assign_price')}" data-quote-price="${o.id}::${x.idx}" value="${quotePriceDrafts[o.id+'::'+x.idx]||''}">
+            </div>
+            <button class="btn btn-teal btn-sm" data-quote-save="${o.id}::${x.idx}">${t('save_price')}</button>
+          </div>
+        `).join('')}
+      </div>`;
+    }).join('')}
+  `;
+}
+
+function renderAdminPricing(){
+  const s = db.settings;
+  return `
+    <div class="admin-banner">${t('pricing_intro')}</div>
+    <div class="field"><label>${t('price_express')}</label><input id="set-express" type="number" min="0" value="${s.expressPercent}"></div>
+    <div class="field"><label>${t('price_delivery')}</label><input id="set-delivery" type="number" min="0" value="${s.deliveryFee}"></div>
+    <div class="field"><label>${t('price_pickup')}</label><input id="set-pickup" type="number" min="0" value="${s.pickupFee}"></div>
+    <div class="field"><label>${t('price_discount')}</label><input id="set-discount" type="number" min="0" value="${s.discountPercent}"></div>
+    <label class="checkbox-row"><input type="checkbox" id="set-delivery-enabled" ${s.deliveryEnabled?'checked':''}> ${t('enable_delivery')}</label>
+    <label class="checkbox-row"><input type="checkbox" id="set-pickup-enabled" ${s.pickupEnabled?'checked':''}> ${t('enable_pickup')}</label>
+    <button class="btn btn-primary" id="btn-save-pricing" style="width:100%;">${t('save')}</button>
+  `;
+}
+
+/* ============ EVENTOS ============ */
+function bindEvents(){
+  const app = document.getElementById('app');
+
+  app.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{ lang = b.dataset.lang; render(); });
+  app.querySelectorAll('[data-switch]').forEach(b=>b.onclick=()=>{
+    const target = b.dataset.switch;
+    if(target==='cliente' && !session.userId){
+      session = {role:null, userId:null}; authScreen='login'; toast(lang==='is'?'Skráðu þig inn sem viðskiptavinur fyrst':'Sign in as a client first'); render(); return;
+    }
+    viewMode = target; session.role = target; render();
+  });
+
+  const goReg = document.getElementById('go-registro'); if(goReg) goReg.onclick=()=>{authScreen='registro'; render();};
+  const goLogin = document.getElementById('go-login'); if(goLogin) goLogin.onclick=()=>{authScreen='login'; render();};
+
+  const btnLogin = document.getElementById('btn-login');
+  if(btnLogin) btnLogin.onclick = ()=>{
+    const email = document.getElementById('login-email').value.trim().toLowerCase();
+    const pass = document.getElementById('login-pass').value.trim();
+    const user = db.users.find(u=>u.email.toLowerCase()===email && u.pass===pass);
+    if(!user){ toast(t('err_email_pass')); return; }
+    session = {role:'cliente', userId:user.id}; viewMode='cliente'; render();
+  };
+  const btnStaffLogin = document.getElementById('btn-staff-login');
+  if(btnStaffLogin) btnStaffLogin.onclick = ()=>{ session={role:'staff',userId:null}; viewMode='staff'; staffTab='today'; render(); };
+  const btnAdminLogin = document.getElementById('btn-admin-login');
+  if(btnAdminLogin) btnAdminLogin.onclick = ()=>{ session={role:'admin',userId:null}; viewMode='admin'; adminTab='reports'; render(); };
+
+  const btnRegistro = document.getElementById('btn-registro');
+  if(btnRegistro) btnRegistro.onclick = ()=>{
+    const name = document.getElementById('reg-name').value.trim();
+    const email = document.getElementById('reg-email').value.trim().toLowerCase();
+    const phone = document.getElementById('reg-phone').value.trim();
+    const pass = document.getElementById('reg-pass').value.trim();
+    if(!name || !email || !phone || !pass){ toast(t('err_fill_all')); return; }
+    if(db.users.some(u=>u.email.toLowerCase()===email)){ toast(t('err_email_exists')); return; }
+    const newUser = {id:'u'+(db.users.length+1)+'_'+Date.now(), name, email, phone, pass, registeredAt:Date.now(), notificationsEnabled:true, isContract:false};
+    db.users.push(newUser); saveDB(db);
+    session = {role:'cliente', userId:newUser.id}; viewMode='cliente'; render();
+  };
+
+  const btnLogout = document.getElementById('btn-logout');
+  if(btnLogout) btnLogout.onclick = ()=>{ session={role:null,userId:null}; authScreen='login'; render(); };
+
+  const btnNueva = document.getElementById('btn-nueva-orden');
+  if(btnNueva) btnNueva.onclick = ()=>{
+    sheetMode = 'client';
+    orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
+    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false};
+    sheetOpen = true; render();
+    const f = document.getElementById('orden-fecha'); if(f){ f.min = new Date().toISOString().slice(0,10); }
+  };
+  const btnLogOrder = document.getElementById('btn-log-order');
+  if(btnLogOrder) btnLogOrder.onclick = ()=>{
+    sheetMode = 'manual';
+    orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
+    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false};
+    orderDraftManualClientId = ''; orderDraftManualName = '';
+    sheetOpen = true; render();
+    const f = document.getElementById('orden-fecha'); if(f){ f.min = new Date().toISOString().slice(0,10); }
+  };
+  const btnCancel = document.getElementById('btn-cancel-orden'); if(btnCancel) btnCancel.onclick=()=>{ sheetOpen=false; render(); };
+  const backdrop = document.getElementById('sheet-backdrop'); if(backdrop) backdrop.onclick=()=>{ sheetOpen=false; render(); };
+
+  const manualClientSelect = document.getElementById('manual-client-select');
+  if(manualClientSelect) manualClientSelect.onchange = ()=>{ orderDraftManualClientId = manualClientSelect.value; };
+  const manualClientName = document.getElementById('manual-client-name');
+  if(manualClientName) manualClientName.oninput = ()=>{ orderDraftManualName = manualClientName.value; };
+  app.querySelectorAll('input[name="return-method"]').forEach(el=>el.onchange=()=>{ orderDraftMods.returnMethod = el.value; render(); });
+
+  const addItemBtn = document.getElementById('add-item-btn');
+  if(addItemBtn && sheetOpen) addItemBtn.onclick = ()=>{ orderDraftItems.push({tipo:activeProducts()[0].key, cant:1, desc:''}); render(); };
+  app.querySelectorAll('[data-remove-item]').forEach(b=>b.onclick=()=>{ orderDraftItems.splice(parseInt(b.dataset.removeItem),1); render(); });
+  app.querySelectorAll('[data-item-tipo]').forEach(el=>el.onchange=()=>{ orderDraftItems[parseInt(el.dataset.itemTipo)].tipo = el.value; render(); });
+  app.querySelectorAll('[data-item-cant]').forEach(el=>el.onchange=()=>{ orderDraftItems[parseInt(el.dataset.itemCant)].cant = Math.max(1, parseInt(el.value)||1); render(); });
+  app.querySelectorAll('[data-item-desc]').forEach(el=>el.oninput=()=>{ orderDraftItems[parseInt(el.dataset.itemDesc)].desc = el.value; });
+
+  const ou = document.getElementById('orden-urgent'); if(ou) ou.onchange=()=>{ orderDraftMods.urgent=ou.checked; render(); };
+  const op = document.getElementById('orden-pickup'); if(op) op.onchange=()=>{ orderDraftMods.pickup=op.checked; render(); };
+
+  const btnSubmitOrden = document.getElementById('btn-submit-orden');
+  if(btnSubmitOrden) btnSubmitOrden.onclick = ()=>{
+    const fecha = document.getElementById('orden-fecha').value;
+    const comentarios = document.getElementById('orden-comentarios').value.trim();
+    if(!fecha){ toast(t('err_pick_date')); return; }
+    if(orderDraftItems.some(it=>it.tipo==='other' && !it.desc.trim())){ toast(t('err_other_desc')); return; }
+
+    let userId, clientName, user;
+    if(sheetMode==='manual'){
+      if(orderDraftManualClientId){
+        user = db.users.find(u=>u.id===orderDraftManualClientId);
+        userId = user.id; clientName = user.name;
+      } else if(orderDraftManualName.trim()){
+        userId = null; clientName = orderDraftManualName.trim(); user = null;
+      } else { toast(t('err_manual_client')); return; }
+    } else {
+      user = db.users.find(u=>u.id===session.userId);
+      if(!user){ toast(t('err_email_pass')); sheetOpen=false; session={role:null,userId:null}; authScreen='login'; render(); return; }
+      userId = user.id; clientName = user.name;
+    }
+
+    const itemsWithOverride = orderDraftItems.map(it=>({...it, priceOverride: it.priceOverride!=null?it.priceOverride:null}));
+    const newOrder = {
+      id:'ORD-'+(1000+db.orders.length+1), userId, clientName,
+      items:JSON.parse(JSON.stringify(itemsWithOverride)), fecha, comentarios,
+      estado:'en-cola', urgent:orderDraftMods.urgent, returnMethod:orderDraftMods.returnMethod, pickup:orderDraftMods.pickup,
+      problem:false, source: sheetMode==='manual' ? 'staff' : 'client', notas:[], creado:Date.now(), deliveredAt:null
+    };
+    db.orders.push(newOrder); saveDB(db);
+    if(user) notifyOrderCreated(user, newOrder);
+    sheetOpen = false; render();
+    toast(sheetMode==='manual' ? t('manual_order_logged') : t('order_sent'));
+  };
+
+  app.querySelectorAll('[data-clientsubtab]').forEach(b=>b.onclick=()=>{ clientSubTab=b.dataset.clientsubtab; render(); });
+  app.querySelectorAll('[data-stafftab]').forEach(b=>b.onclick=()=>{ staffTab=b.dataset.stafftab; staffQuickFilter=null; addingClient=false; editingClientId=null; render(); });
+  app.querySelectorAll('[data-admintab]').forEach(b=>b.onclick=()=>{ adminTab=b.dataset.admintab; editingProductId=null; addingProduct=false; addingClient=false; editingClientId=null; render(); });
+  app.querySelectorAll('[data-quickfilter]').forEach(b=>b.onclick=()=>{ staffQuickFilter=b.dataset.quickfilter; staffFilter='todos'; staffClientFilter='todos'; staffTab='orders'; render(); });
+  const clearQF = document.getElementById('clear-quickfilter'); if(clearQF) clearQF.onclick=()=>{ staffQuickFilter=null; render(); };
+
+  const clientFilterSelect = document.getElementById('staff-client-filter');
+  if(clientFilterSelect) clientFilterSelect.onchange = (e)=>{ staffClientFilter=e.target.value; render(); };
+  app.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ staffFilter=b.dataset.filter; staffQuickFilter=null; render(); });
+  app.querySelectorAll('[data-view-client]').forEach(b=>b.onclick=()=>{ staffClientFilter=b.dataset.viewClient; staffFilter='todos'; staffQuickFilter=null; if(session.role==='staff') staffTab='orders'; else adminTab='orders'; render(); });
+
+  const btnAddClient = document.getElementById('btn-add-client');
+  if(btnAddClient) btnAddClient.onclick = ()=>{ addingClient = true; editingClientId=null; render(); };
+  const cfCancel = document.getElementById('cf-cancel'); if(cfCancel) cfCancel.onclick = ()=>{ addingClient=false; render(); };
+  const cfSave = document.getElementById('cf-save');
+  if(cfSave) cfSave.onclick = ()=>{
+    const name = document.getElementById('cf-name').value.trim();
+    const email = document.getElementById('cf-email').value.trim().toLowerCase();
+    const phone = document.getElementById('cf-phone').value.trim();
+    const pass = document.getElementById('cf-pass').value.trim() || '1234';
+    const contractEl = document.getElementById('cf-contract');
+    if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
+    if(db.users.some(u=>u.email.toLowerCase()===email)){ toast(t('err_email_exists')); return; }
+    db.users.push({id:'u'+(db.users.length+1)+'_'+Date.now(), name, email, phone, pass, registeredAt:Date.now(), notificationsEnabled:true, isContract: contractEl ? contractEl.checked : false});
+    saveDB(db); addingClient=false; toast(t('client_registered')); render();
+  };
+
+  app.querySelectorAll('[data-customize-client]').forEach(b=>b.onclick=()=>{ editingClientId=b.dataset.customizeClient; addingClient=false; render(); });
+  const ceCancel = document.getElementById('ce-cancel'); if(ceCancel) ceCancel.onclick = ()=>{ editingClientId=null; render(); };
+  const ceSave = document.getElementById('ce-save');
+  if(ceSave) ceSave.onclick = ()=>{
+    const u = db.users.find(x=>x.id===ceSave.dataset.editingClient);
+    const name = document.getElementById('ce-name').value.trim();
+    const email = document.getElementById('ce-email').value.trim().toLowerCase();
+    const phone = document.getElementById('ce-phone').value.trim();
+    if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
+    if(db.users.some(x=>x.id!==u.id && x.email.toLowerCase()===email)){ toast(t('err_email_exists')); return; }
+    u.name=name; u.email=email; u.phone=phone;
+    u.notificationsEnabled = document.getElementById('ce-notifications').checked;
+    u.isContract = document.getElementById('ce-contract').checked;
+    saveDB(db); editingClientId=null; toast(t('client_updated')); render();
+  };
+  const ceResetPass = document.getElementById('ce-reset-pass');
+  if(ceResetPass) ceResetPass.onclick = ()=>{
+    const u = db.users.find(x=>x.id===ceResetPass.dataset.resetClient);
+    const newPass = Math.random().toString(36).slice(-6);
+    u.pass = newPass; saveDB(db);
+    alert(t('password_reset_note')+' '+newPass);
+    render();
+  };
+
+  app.querySelectorAll('[data-advance]').forEach(b=>b.onclick=()=>{
+    const o = db.orders.find(x=>x.id===b.dataset.advance);
+    const idx = ESTADOS.indexOf(o.estado);
+    if(idx < ESTADOS.length-1){
+      o.estado = ESTADOS[idx+1];
+      if(o.estado==='entregado') o.deliveredAt = Date.now();
+      o.notas.push('__status__:'+o.estado);
+      saveDB(db);
+      const user = db.users.find(u=>u.id===o.userId);
+      notifyStatusChanged(user, o, '');
+      render(); toast(t('order_updated'));
+    }
+  });
+  app.querySelectorAll('[data-hold]').forEach(b=>b.onclick=()=>{
+    const o = db.orders.find(x=>x.id===b.dataset.hold);
+    o.problem = true; o.notas.push('__problem__'); saveDB(db);
+    const user = db.users.find(u=>u.id===o.userId);
+    notifyStatusChanged(user, o, t('problem_note'));
+    render(); toast(t('note_added'));
+  });
+  app.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=()=>{
+    const o = db.orders.find(x=>x.id===b.dataset.resolve);
+    o.problem = false; o.notas.push('__resolved__'); saveDB(db);
+    const user = db.users.find(u=>u.id===o.userId);
+    notifyStatusChanged(user, o, t('resolved_note'));
+    render(); toast(t('issue_resolved'));
+  });
+  app.querySelectorAll('[data-note-submit]').forEach(b=>b.onclick=()=>{
+    const id = b.dataset.noteSubmit;
+    const input = app.querySelector(`[data-note-input="${id}"]`);
+    const val = input.value.trim(); if(!val) return;
+    const o = db.orders.find(x=>x.id===id);
+    o.notas.push(val); saveDB(db);
+    const user = db.users.find(u=>u.id===o.userId);
+    notifyStatusChanged(user, o, val);
+    render(); toast(t('note_sent'));
+  });
+
+  /* ---- Admin: products CRUD ---- */
+  const btnAddProduct = document.getElementById('btn-add-product');
+  if(btnAddProduct) btnAddProduct.onclick = ()=>{ addingProduct=true; editingProductId=null; render(); };
+  app.querySelectorAll('[data-edit-product]').forEach(b=>b.onclick=()=>{ editingProductId=b.dataset.editProduct; addingProduct=false; render(); });
+  const pfCancel = document.getElementById('pf-cancel'); if(pfCancel) pfCancel.onclick=()=>{ editingProductId=null; addingProduct=false; render(); };
+  const pfSave = document.getElementById('pf-save');
+  if(pfSave) pfSave.onclick = ()=>{
+    const en = document.getElementById('pf-en').value.trim();
+    const is = document.getElementById('pf-is').value.trim();
+    const priceRaw = document.getElementById('pf-price').value;
+    const price = priceRaw==='' ? null : Math.max(0, parseInt(priceRaw)||0);
+    const unit = document.getElementById('pf-unit').value;
+    const category = document.getElementById('pf-category').value;
+    const active = document.getElementById('pf-active').checked;
+    if(!en || !is){ toast(t('err_product_fields')); return; }
+    const editing = pfSave.dataset.editing;
+    if(editing==='new'){
+      const key = 'p_'+Date.now();
+      const maxOrder = Math.max(0, ...db.products.map(p=>p.sortOrder));
+      db.products.push({id:key, key, en, is, price, unit, category, active, sortOrder:maxOrder+1});
+      saveDB(db); addingProduct=false; toast(t('product_added'));
+    } else {
+      const p = db.products.find(x=>x.id===editing);
+      Object.assign(p, {en, is, price, unit, category, active});
+      saveDB(db); editingProductId=null; toast(t('product_updated'));
+    }
+    render();
+  };
+  app.querySelectorAll('[data-toggle-active]').forEach(b=>b.onclick=()=>{
+    const p = db.products.find(x=>x.id===b.dataset.toggleActive); p.active = !p.active; saveDB(db); render();
+  });
+  app.querySelectorAll('[data-move-up]').forEach(b=>b.onclick=()=>{
+    const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
+    const idx = products.findIndex(p=>p.id===b.dataset.moveUp);
+    if(idx>0){ const tmp=products[idx].sortOrder; products[idx].sortOrder=products[idx-1].sortOrder; products[idx-1].sortOrder=tmp; saveDB(db); render(); }
+  });
+  app.querySelectorAll('[data-move-down]').forEach(b=>b.onclick=()=>{
+    const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
+    const idx = products.findIndex(p=>p.id===b.dataset.moveDown);
+    if(idx<products.length-1){ const tmp=products[idx].sortOrder; products[idx].sortOrder=products[idx+1].sortOrder; products[idx+1].sortOrder=tmp; saveDB(db); render(); }
+  });
+  app.querySelectorAll('[data-delete-product]').forEach(b=>b.onclick=()=>{
+    const used = db.orders.some(o=>o.items.some(it=>it.tipo===b.dataset.deleteProduct && db.products.find(p=>p.id===b.dataset.deleteProduct)?.key===it.tipo));
+    if(used){ toast(t('cannot_delete_used')); return; }
+    if(!confirm(t('confirm_delete'))) return;
+    db.products = db.products.filter(p=>p.id!==b.dataset.deleteProduct);
+    saveDB(db); toast(t('product_deleted')); render();
+  });
+
+  /* ---- Admin: pricing ---- */
+  const btnSavePricing = document.getElementById('btn-save-pricing');
+  if(btnSavePricing) btnSavePricing.onclick = ()=>{
+    db.settings.expressPercent = Math.max(0, parseInt(document.getElementById('set-express').value)||0);
+    db.settings.deliveryFee = Math.max(0, parseInt(document.getElementById('set-delivery').value)||0);
+    db.settings.pickupFee = Math.max(0, parseInt(document.getElementById('set-pickup').value)||0);
+    db.settings.discountPercent = Math.max(0, parseInt(document.getElementById('set-discount').value)||0);
+    db.settings.deliveryEnabled = document.getElementById('set-delivery-enabled').checked;
+    db.settings.pickupEnabled = document.getElementById('set-pickup-enabled').checked;
+    saveDB(db); toast(t('pricing_saved')); render();
+  };
+
+  /* ---- Admin: quotes (assign price to "Other" items) ---- */
+  app.querySelectorAll('[data-quote-price]').forEach(el=>el.oninput=()=>{ quotePriceDrafts[el.dataset.quotePrice] = el.value; });
+  app.querySelectorAll('[data-quote-save]').forEach(b=>b.onclick=()=>{
+    const [orderId, idxStr] = b.dataset.quoteSave.split('::');
+    const idx = parseInt(idxStr);
+    const val = quotePriceDrafts[b.dataset.quoteSave];
+    const price = parseInt(val);
+    if(isNaN(price) || price<0){ toast(t('err_product_fields')); return; }
+    const o = db.orders.find(x=>x.id===orderId);
+    o.items[idx].priceOverride = price;
+    delete quotePriceDrafts[b.dataset.quoteSave];
+    saveDB(db);
+    const stillPending = o.items.some(it=>it.tipo==='other' && it.priceOverride==null);
+    if(!stillPending){
+      const user = db.users.find(u=>u.id===o.userId);
+      if(user) notifyStatusChanged(user, o, t('quote_confirmed_note'));
+    }
+    toast(t('price_assigned')); render();
+  });
+}
+
+render();
+</script>
+</body>
+</html>
