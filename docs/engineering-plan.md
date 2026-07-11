@@ -195,11 +195,11 @@ A1, A2, A3 land sequentially first (all three, not just A1). C can start in its 
 
 Synthesized from this review's findings. Each task derives from a specific finding above. Run with Claude Code or Codex; checkbox as you ship.
 
-- [ ] **T1 (P1, human: ~3.5h / CC: ~25min)** — schema — Write migrations for profiles/products/settings/orders/order_items/email_log per the schema above, including the settings singleton CHECK constraint, the `handle_new_user` signup-provisioning trigger, and the `BEFORE UPDATE` trigger protecting `profiles.role`/`is_contract`
+- [x] **T1 (P1, human: ~3.5h / CC: ~25min)** — schema — Write migrations for profiles/products/settings/orders/order_items/email_log per the schema above, including the settings singleton CHECK constraint, the `handle_new_user` signup-provisioning trigger, and the `BEFORE UPDATE` trigger protecting `profiles.role`/`is_contract`
   - Surfaced by: Architecture review — order_items normalization, settings singleton; Outside voice — missing profile-provisioning trigger, RLS is not column-level
   - Files: `supabase/migrations/`
   - Verify: migration applies cleanly on a fresh Supabase project; settings second-row insert fails; new signup produces a profiles row; client attempt to self-promote role is rejected
-- [ ] **T2 (P1, human: ~3h / CC: ~20min)** — RLS — Write RLS policies per the RLS summary table for all 6 tables, all 3 roles
+- [x] **T2 (P1, human: ~3h / CC: ~20min)** — RLS — Write RLS policies per the RLS summary table for all 6 tables, all 3 roles
   - Surfaced by: Architecture review — staff write scope, RLS as launch success criterion
   - Files: `supabase/migrations/`
   - Verify: RLS test suite (Test Plan artifact) — one allowed + one denied case per role/table
