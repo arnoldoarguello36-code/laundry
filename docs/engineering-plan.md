@@ -215,7 +215,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: Architecture review — async/sync bridge; Code quality review — write failure handling; Outside voice — no Realtime replacement, T5 depends on T2+T3 not just T1
   - Files: the HTML/JS prototype file (to be moved into the new repo)
   - Verify: E2E signup → order → status-change → delivered flow works against a live Supabase project; staff view reflects a new order within 20s without manual refresh
-- [ ] **T6 (P1, human: ~1h / CC: ~10min)** — Edge Function — Bilingual (preferred_lang) email templates + Resend call, non-blocking, logs failures to email_log
+- [x] **T6 (P1, human: ~1h / CC: ~10min)** — Edge Function — Bilingual (preferred_lang) email templates + Resend call, non-blocking, logs failures to email_log
   - Surfaced by: Architecture review — email language persistence, non-blocking email
   - Files: `supabase/functions/`
   - Verify: Resend API key invalid → order/status write still succeeds, email_log shows failed
