@@ -218,6 +218,10 @@
 <script>
 /* ============ SUPABASE CLIENT ============ */
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Throwaway, non-persisting client used only for staff-initiated client
+// signUp() and resetPasswordForEmail() calls — so those calls never clobber
+// the staff/admin member's own persisted session on `sb`.
+const sbAnon = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession:false, autoRefreshToken:false } });
 
 /* ============ CATEGORÍAS ============ */
 const CATEGORIES = {
@@ -337,7 +341,20 @@ const I18N = {
     password_reset_note:"Password reset. New temporary password:",
 
     contract_dashboard_title:"Contract clients — today", contract_dashboard_sub:"Garments processed today, by account",
-    no_contract_activity:"No contract client activity today", items_processed:"garments"
+    no_contract_activity:"No contract client activity today", items_processed:"garments",
+
+    client_setup_email_note:"The client will receive an email to set their password.",
+    password_reset_sent:"Password reset email sent.",
+    forgot_password:"Forgot password?", forgot_password_title:"Reset your password",
+    forgot_password_sub:"Enter your email and we'll send you a reset link.",
+    send_reset_link:"Send reset link", back_to_login:"Remembered it?",
+    reset_link_sent:"If that email exists, a reset link has been sent.",
+    set_new_password_title:"Set a new password", set_new_password_sub:"Choose a new password for your account.",
+    new_password:"New password", confirm_new_password:"Confirm new password", btn_set_password:"Update password",
+    password_updated:"Password updated — please sign in", err_password_mismatch:"Passwords don't match",
+    err_password_short:"Password must be at least 6 characters",
+    confirm_email_sent:"Account created — check your email to confirm before signing in.",
+    err_role_mismatch:"That login isn't valid for this account type", err_generic:"Something went wrong — please try again"
   },
   is: {
     brand_name:"Norðurljós", brand_tag:"Þvottahús og fatahreinsun",
@@ -447,14 +464,26 @@ const I18N = {
     password_reset_note:"Lykilorð endurstillt. Nýtt tímabundið lykilorð:",
 
     contract_dashboard_title:"Samningsviðskiptavinir — í dag", contract_dashboard_sub:"Flíkur unnar í dag, eftir aðgangi",
-    no_contract_activity:"Engin virkni samningsviðskiptavina í dag", items_processed:"flíkur"
+    no_contract_activity:"Engin virkni samningsviðskiptavina í dag", items_processed:"flíkur",
+
+    client_setup_email_note:"Viðskiptavinurinn fær tölvupóst til að stilla lykilorð.",
+    password_reset_sent:"Tölvupóstur til að endurstilla lykilorð sendur.",
+    forgot_password:"Gleymt lykilorð?", forgot_password_title:"Endurstilla lykilorð",
+    forgot_password_sub:"Sláðu inn netfangið þitt og við sendum þér tengil.",
+    send_reset_link:"Senda tengil", back_to_login:"Mundir þú það?",
+    reset_link_sent:"Ef netfangið er skráð hefur tengill verið sendur.",
+    set_new_password_title:"Stilla nýtt lykilorð", set_new_password_sub:"Veldu nýtt lykilorð fyrir aðganginn þinn.",
+    new_password:"Nýtt lykilorð", confirm_new_password:"Staðfesta nýtt lykilorð", btn_set_password:"Uppfæra lykilorð",
+    password_updated:"Lykilorð uppfært — skráðu þig inn", err_password_mismatch:"Lykilorð stemma ekki",
+    err_password_short:"Lykilorð verður að vera minnst 6 stafir",
+    confirm_email_sent:"Aðgangur stofnaður — athugaðu tölvupóstinn til að staðfesta áður en þú skráir þig inn.",
+    err_role_mismatch:"Þessi innskráning gildir ekki fyrir þessa tegund aðgangs", err_generic:"Eitthvað fór úrskeiðis — reyndu aftur"
   }
 };
 let lang = 'en';
 function t(key){ return I18N[lang][key] ?? key; }
 
 /* ============ ESTADO Y PERSISTENCIA ============ */
-const DB_KEY = 'norduljos_lavanderia_v4';
 const ESTADOS = ["en-cola","aceptado","en-proceso","listo","entregado"];
 function statusLabel(e){ return t('status')[e]; }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -483,53 +512,90 @@ function computeOrderTotals(items, mods){
   return {itemsTotal, expressFee, deliveryFee, pickupFee, discount, total, hasPending};
 }
 
-function loadDB(){
-  const raw = localStorage.getItem(DB_KEY);
-  if(raw) return JSON.parse(raw);
-  const now = Date.now(); const day = 86400000;
-  const seed = {
-    users: [
-      {id:"u1", name:"Anna Björk", email:"anna.bjork@example.is", phone:"555-0110", pass:"1234", registeredAt: now-day*40, notificationsEnabled:true, isContract:false},
-      {id:"u2", name:"Karl Sigurdsson", email:"karl.sig@example.is", phone:"555-0142", pass:"1234", registeredAt: now-day*25, notificationsEnabled:true, isContract:false},
-      {id:"u3", name:"Sofía Rúnarsdóttir", email:"sofia.run@example.is", phone:"555-0177", pass:"1234", registeredAt: now-day*5, notificationsEnabled:false, isContract:false},
-      {id:"u4", name:"Hótel Húsavík", email:"reception@hotelhusavik.is", phone:"555-0201", pass:"1234", registeredAt: now-day*60, notificationsEnabled:true, isContract:true}
-    ],
-    products: [
-      {id:"bedsheets", key:"bedsheets", en:"Bed sheets (set)", is:"Rúmföt (sett)", price:2500, unit:"set", category:"bedding", active:true, sortOrder:0},
-      {id:"pillowcase", key:"pillowcase", en:"Pillow case", is:"Koddaver", price:1000, unit:"pc", category:"bedding", active:true, sortOrder:1},
-      {id:"duvetcover", key:"duvetcover", en:"Duvet cover", is:"Sængurver", price:1800, unit:"pc", category:"bedding", active:true, sortOrder:2},
-      {id:"towel", key:"towel", en:"Towel", is:"Handklæði", price:800, unit:"pc", category:"general", active:true, sortOrder:3},
-      {id:"shirt", key:"shirt", en:"Shirt", is:"Skyrta", price:900, unit:"pc", category:"apparel", active:true, sortOrder:4},
-      {id:"trousers", key:"trousers", en:"Trousers", is:"Buxur", price:1200, unit:"pc", category:"apparel", active:true, sortOrder:5},
-      {id:"jacket", key:"jacket", en:"Jacket", is:"Jakki", price:2200, unit:"pc", category:"apparel", active:true, sortOrder:6},
-      {id:"dress", key:"dress", en:"Dress", is:"Kjóll", price:1900, unit:"pc", category:"apparel", active:true, sortOrder:7},
-      {id:"generalkg", key:"generalkg", en:"General laundry (kg)", is:"Almennur þvottur (kg)", price:700, unit:"kg", category:"general", active:true, sortOrder:8},
-      {id:"other", key:"other", en:"Other (describe)", is:"Annað (lýstu)", price:null, unit:"pc", category:"other", active:true, sortOrder:9}
-    ],
-    settings: { expressPercent:50, deliveryFee:1500, pickupFee:1000, discountPercent:0, deliveryEnabled:true, pickupEnabled:true },
-    orders: [
-      {id:"ORD-1042", userId:"u1", clientName:"Anna Björk", items:[{tipo:"shirt",cant:5,priceOverride:null},{tipo:"trousers",cant:2,priceOverride:null}], fecha:"2026-07-10", comentarios:"Please no starch on the shirts.", estado:"en-proceso", urgent:true, returnMethod:"store", pickup:false, problem:false, source:"client", notas:["received_note"], creado: now-day*1.2, deliveredAt:null},
-      {id:"ORD-1041", userId:"u1", clientName:"Anna Björk", items:[{tipo:"duvetcover",cant:1,priceOverride:null}], fecha:"2026-07-08", comentarios:"", estado:"entregado", urgent:false, returnMethod:"delivery", pickup:false, problem:false, source:"client", notas:["delivered_note"], creado: now-day*3, deliveredAt: now-day*1},
-      {id:"ORD-1040", userId:"u2", clientName:"Karl Sigurdsson", items:[{tipo:"generalkg",cant:6,priceOverride:null}], fecha:"2026-07-09", comentarios:"", estado:"aceptado", urgent:false, returnMethod:"store", pickup:true, problem:false, source:"client", notas:[], creado: now-day*2, deliveredAt:null},
-      {id:"ORD-1039", userId:"u2", clientName:"Karl Sigurdsson", items:[{tipo:"towel",cant:3,priceOverride:null}], fecha:"2026-07-06", comentarios:"", estado:"entregado", urgent:false, returnMethod:"store", pickup:false, problem:false, source:"client", notas:["delivered_note"], creado: now-day*5, deliveredAt: now-day*3.5},
-      {id:"ORD-1038", userId:"u3", clientName:"Sofía Rúnarsdóttir", items:[{tipo:"dress",cant:1,priceOverride:null},{tipo:"jacket",cant:1,priceOverride:null}], fecha:todayISOOffset(now,1), comentarios:"Dry clean only please.", estado:"en-cola", urgent:false, returnMethod:"store", pickup:false, problem:true, source:"client", notas:["__problem__"], creado: now-day*0.4, deliveredAt:null},
-      {id:"ORD-1037", userId:"u3", clientName:"Sofía Rúnarsdóttir", items:[{tipo:"bedsheets",cant:2,priceOverride:null}], fecha:"2026-07-04", comentarios:"", estado:"entregado", urgent:false, returnMethod:"store", pickup:false, problem:false, source:"client", notas:["delivered_note"], creado: now-day*7, deliveredAt: now-day*5.2},
-      {id:"ORD-1036", userId:"u1", clientName:"Anna Björk", items:[{tipo:"shirt",cant:3,priceOverride:null}], fecha:todayISOOffset(now,-2), comentarios:"", estado:"listo", urgent:false, returnMethod:"store", pickup:false, problem:false, source:"client", notas:[], creado: now-day*9, deliveredAt:null},
-      {id:"ORD-1035", userId:"u4", clientName:"Hótel Húsavík", items:[{tipo:"bedsheets",cant:14,priceOverride:null},{tipo:"towel",cant:20,priceOverride:null},{tipo:"other",cant:1,desc:"3 bathrobes, dry clean",priceOverride:4500}], fecha:todayISOOffset(now,0), comentarios:"Weekly contract pickup.", estado:"en-proceso", urgent:false, returnMethod:"delivery", pickup:true, problem:false, source:"staff", notas:["received_note"], creado: now-day*0.8, deliveredAt:null},
-      {id:"ORD-1034", userId:"u4", clientName:"Hótel Húsavík", items:[{tipo:"bedsheets",cant:8,priceOverride:null},{tipo:"pillowcase",cant:16,priceOverride:null}], fecha:todayISOOffset(now,0), comentarios:"", estado:"en-cola", urgent:false, returnMethod:"delivery", pickup:true, problem:false, source:"staff", notas:[], creado: now-day*0.1, deliveredAt:null}
-    ],
-    emailLog: []
-  };
-  localStorage.setItem(DB_KEY, JSON.stringify(seed));
-  return seed;
-}
-function todayISOOffset(now,d){ return new Date(now + d*86400000).toISOString().slice(0,10); }
-function saveDB(db){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-let db = loadDB();
-if(!db.emailLog) db.emailLog = [];
+/* ============ SUPABASE DATA LAYER ============ */
+// Front-end keeps the same in-memory `db` shape the render functions already
+// expect (products/settings/orders/users/emailLog, camelCase fields) — per
+// the locked T5 scope ("Supabase client calls behind the existing db
+// in-memory cache"). These functions populate that cache asynchronously
+// instead of reading it synchronously from localStorage. Mutations call a
+// Supabase RPC/insert/update, then re-run the relevant loader(s) below and
+// re-render — there's no local optimistic mutation of `db` anymore.
+let db = {
+  users: [], products: [], settings: { expressPercent:0, deliveryFee:0, pickupFee:0, discountPercent:0, deliveryEnabled:true, pickupEnabled:true },
+  orders: [], emailLog: []
+};
 
-let session = { role:null, userId:null };
-let viewMode = 'cliente';
+function mapProfile(p){
+  return { id:p.id, name:p.name, email:p.email, phone:p.phone, registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, role: p.role, preferredLang: p.preferred_lang };
+}
+function mapProduct(p){
+  return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order };
+}
+function mapSettings(s){
+  return { expressPercent:Number(s.express_percent), deliveryFee:Number(s.delivery_fee), pickupFee:Number(s.pickup_fee), discountPercent:Number(s.discount_percent), deliveryEnabled:s.delivery_enabled, pickupEnabled:s.pickup_enabled };
+}
+function mapOrder(o){
+  return {
+    id:o.id, userId:o.client_id, clientName:o.client_name, fecha:o.fecha, comentarios:o.comentarios||'',
+    items:(o.order_items||[]).map(it=>({ id:it.id, tipo:it.product_id, cant:Number(it.qty), priceOverride: it.price_override===null||it.price_override===undefined ? null : Number(it.price_override), desc:it.desc||'' })),
+    estado:o.estado, urgent:o.urgent, returnMethod:o.return_method, pickup:o.pickup, problem:o.problem, source:o.source,
+    notas:o.notas||[], creado: new Date(o.created_at).getTime(), deliveredAt: o.delivered_at ? new Date(o.delivered_at).getTime() : null
+  };
+}
+
+async function loadProducts(){
+  const { data, error } = await sb.from('products').select('*').order('sort_order', {ascending:true});
+  if(error){ console.error('loadProducts', error); toast(t('err_generic')); return; }
+  db.products = (data||[]).map(mapProduct);
+}
+async function loadSettings(){
+  const { data, error } = await sb.from('settings').select('*').eq('id', 1).single();
+  if(error){ console.error('loadSettings', error); toast(t('err_generic')); return; }
+  db.settings = mapSettings(data);
+}
+async function loadOrders(){
+  // RLS scopes this automatically: clients only ever get their own rows back,
+  // staff/admin get everything — no manual client_id filter needed.
+  const { data, error } = await sb.from('orders')
+    .select('*, order_items(id, product_id, qty, price_override, desc)')
+    .order('created_at', {ascending:false});
+  if(error){ console.error('loadOrders', error); toast(t('err_generic')); return; }
+  db.orders = (data||[]).map(mapOrder);
+}
+async function loadUsers(){
+  // `db.users` is (and always was) "clients only" — staff/admin accounts
+  // never appear in this list.
+  const { data, error } = await sb.from('profiles').select('*').eq('role','client').order('registered_at', {ascending:true});
+  if(error){ console.error('loadUsers', error); toast(t('err_generic')); return; }
+  db.users = (data||[]).map(mapProfile);
+}
+async function loadEmailLog(){
+  const { data, error } = await sb.from('email_log').select('*').order('sent_at', {ascending:false}).limit(200);
+  if(error){ console.error('loadEmailLog', error); toast(t('err_generic')); return; }
+  db.emailLog = (data||[]).map(e=>({ to:e.to_address, subject:e.subject, body:e.body, ts:new Date(e.sent_at).getTime(), status:e.status }));
+}
+async function loadDataForSession(){
+  await loadProducts();
+  await loadSettings();
+  // loadUsers() is safe to call unconditionally: RLS scopes the result to
+  // just the caller's own row for a plain client, and to the full client
+  // list for staff/admin. A plain client needs their own row present in
+  // db.users for the "Hi, {name}" greeting in renderClienteView().
+  await Promise.all([loadOrders(), loadUsers()]);
+}
+
+/* ---- 20s polling refresh for staff/admin (skipped while a form is open, so it never clobbers in-progress edits) ---- */
+function startPolling(){
+  setInterval(async ()=>{
+    if(!session.role || session.role === 'client') return;
+    if(sheetOpen || addingClient || editingClientId || addingProduct || editingProductId) return;
+    await loadOrders();
+    render();
+  }, 20000);
+}
+
+let session = { role:null, userId:null, actualRole:null };
+let viewMode = 'client';
 let staffTab = 'today';
 let adminTab = 'reports';
 let staffFilter = 'todos';
@@ -554,49 +620,26 @@ function toast(msg){
   el.textContent = msg; el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'), 2200);
 }
+// T5/T3 note: notas entries are now structured jsonb objects written server-
+// side by the advance_order_status/add_order_note/flag_problem RPCs, shaped
+// {kind:'status'|'note'|'problem'|'resolved', ..., at}. The old plain-string
+// markers ('__status__:x', '__problem__', etc.) only existed in the
+// prototype's localStorage seed data and can't appear in real rows anymore.
 function noteText(n){
-  if(n === 'received_note' || n === 'delivered_note' || n === '__problem__' || n === '__resolved__'){
-    if(n==='__problem__') return t('problem_note');
-    if(n==='__resolved__') return t('resolved_note');
-    return t(n);
-  }
-  if(n && n.startsWith('__status__:')) return t('status_updated_note')+' "'+statusLabel(n.split(':')[1])+'".';
-  return n;
-}
-
-/* ---- Simulated email sending (production: N8N + Resend/SendGrid) ---- */
-function itemsToText(items){
-  return items.map(it=>{
-    const p = priceEntry(it.tipo);
-    const label = it.tipo==='other' ? (it.desc||'Other') : (p[lang]||p.en);
-    const cost = computeItemCost(it);
-    return `  • ${it.cant}× ${label} — ${cost===null? t('quote_pending_item') : fmtISK(cost)}`;
-  }).join('\n');
-}
-function sendEmail(user, subjectKey, bodyKey, vars){
-  const subject = t(subjectKey).replace(/{(\w+)}/g, (_,k)=>vars[k]??'');
-  const body = t(bodyKey).replace(/{(\w+)}/g, (_,k)=>vars[k]??'');
-  db.emailLog.unshift({ to: user ? (user.name+' <'+user.email+'>') : '—', subject, body, ts: Date.now() });
-  saveDB(db);
-}
-function notifyOrderCreated(user, order){
-  if(!user || user.notificationsEnabled===false) return;
-  const {total, hasPending} = computeOrderTotals(order.items, order);
-  sendEmail(user, 'email_subj_new', 'email_body_new', {
-    name:user.name, id:order.id, items:itemsToText(order.items),
-    total: fmtISK(total) + (hasPending ? ' ('+t('pending_items_note')+')' : ''), date: order.fecha
-  });
-}
-function notifyStatusChanged(user, order, note){
-  if(!user || user.notificationsEnabled===false) return;
-  sendEmail(user, 'email_subj_status', 'email_body_status', { name:user.name, id:order.id, status: statusLabel(order.estado), note: note || '' });
+  if(!n || typeof n !== 'object') return n ?? '';
+  if(n.kind === 'status') return t('status_updated_note')+' "'+statusLabel(n.estado)+'".';
+  if(n.kind === 'problem') return t('problem_note');
+  if(n.kind === 'resolved') return t('resolved_note');
+  if(n.kind === 'note') return n.text;
+  return '';
 }
 
 /* ============ RENDER ROOT ============ */
 function render(){
   const app = document.getElementById('app');
+  if(authScreen === 'recovery'){ app.innerHTML = renderTopbar() + renderRecoveryScreen(); bindEvents(); return; }
   if(!session.role){ app.innerHTML = renderTopbar() + renderAuth(); }
-  else if(session.role === 'cliente'){ app.innerHTML = renderTopbar() + renderClienteView() + renderSheet(); }
+  else if(session.role === 'client'){ app.innerHTML = renderTopbar() + renderClienteView() + renderSheet(); }
   else if(session.role === 'staff'){ app.innerHTML = renderTopbar() + renderStaffView() + renderSheet(); }
   else { app.innerHTML = renderTopbar() + renderAdminView() + renderSheet(); }
   bindEvents();
@@ -620,7 +663,7 @@ function renderTopbar(){
     <div class="topbar-right">
       ${session.role ? `
       <div class="mode-switch">
-        <button data-switch="cliente" class="${viewMode==='cliente'?'active':''}">${t('tab_cliente')}</button>
+        <button data-switch="client" class="${viewMode==='client'?'active':''}">${t('tab_cliente')}</button>
         <button data-switch="staff" class="${viewMode==='staff'?'active':''}">${t('tab_staff')}</button>
         <button data-switch="admin" class="${viewMode==='admin'?'active':''}">${t('tab_admin')}</button>
       </div>` : ``}
@@ -641,7 +684,16 @@ function renderAuth(){
       <button class="btn btn-teal" id="btn-staff-login">${t('btn_staff_login')}</button>
       <button class="btn btn-clay" id="btn-admin-login">${t('btn_admin_login')}</button>
       <div class="switch-link">${t('no_account')} <a id="go-registro">${t('signup')}</a></div>
-      <div class="switch-link" style="margin-top:-4px;color:#a9b0b6;">${t('demo_hint')}</div>
+      <div class="switch-link" style="margin-top:-4px;"><a id="go-forgot">${t('forgot_password')}</a></div>
+    </div>`;
+  }
+  if(authScreen === 'forgot'){
+    return `
+    <div class="auth-screen">
+      <div class="auth-hero"><h1>${t('forgot_password_title')}</h1><p>${t('forgot_password_sub')}</p></div>
+      <div class="field"><label>${t('email')}</label><input type="email" id="forgot-email" placeholder="anna.bjork@example.is"></div>
+      <button class="btn btn-primary" id="btn-send-reset">${t('send_reset_link')}</button>
+      <div class="switch-link">${t('back_to_login')} <a id="go-login-from-forgot">${t('login_link')}</a></div>
     </div>`;
   }
   return `
@@ -653,6 +705,15 @@ function renderAuth(){
     <div class="field"><label>${t('pass')}</label><input id="reg-pass" type="password" placeholder="${t('create_pass')}"></div>
     <button class="btn btn-primary" id="btn-registro">${t('btn_create_account')}</button>
     <div class="switch-link">${t('have_account')} <a id="go-login">${t('login_link')}</a></div>
+  </div>`;
+}
+function renderRecoveryScreen(){
+  return `
+  <div class="auth-screen">
+    <div class="auth-hero"><h1>${t('set_new_password_title')}</h1><p>${t('set_new_password_sub')}</p></div>
+    <div class="field"><label>${t('new_password')}</label><input type="password" id="recovery-pass"></div>
+    <div class="field"><label>${t('confirm_new_password')}</label><input type="password" id="recovery-pass2"></div>
+    <button class="btn btn-primary" id="btn-set-password">${t('btn_set_password')}</button>
   </div>`;
 }
 
@@ -904,11 +965,8 @@ function clientAddFormHtml(){
       <div class="field"><label>${t('full_name')}</label><input id="cf-name" placeholder="Jón Jónsson"></div>
       <div class="field"><label>${t('email')}</label><input id="cf-email" type="email" placeholder="jon@example.is"></div>
     </div>
-    <div class="form-row2">
-      <div class="field"><label>${t('phone')}</label><input id="cf-phone" type="tel" placeholder="${t('client_phone_ph')}"></div>
-      <div class="field"><label>${t('client_temp_pass')}</label><input id="cf-pass" value="1234"></div>
-    </div>
-    <div class="item-price-hint" style="margin-bottom:10px;">${t('client_temp_pass_hint')}</div>
+    <div class="field"><label>${t('phone')}</label><input id="cf-phone" type="tel" placeholder="${t('client_phone_ph')}"></div>
+    <div class="item-price-hint" style="margin-bottom:10px;">${t('client_setup_email_note')}</div>
     ${session.role==='admin' ? `<label class="checkbox-row"><input type="checkbox" id="cf-contract"> ${t('contract_client')}</label>` : ''}
     <div class="staff-actions">
       <button style="background:var(--teal)" id="cf-save">${t('save')}</button>
@@ -959,7 +1017,7 @@ function renderStaffNotifications(){
   return `
     <div class="notif-banner">✉️ ${t('notif_intro')}</div>
     ${db.emailLog.length===0 ? `<div class="empty-state"><div class="glyph">✉️</div><h3>${t('no_emails_title')}</h3><p>${t('no_emails_sub')}</p></div>` :
-    db.emailLog.map(e=>`<div class="email-card"><div class="email-head"><span class="email-to">${e.to}</span><span class="email-time">${fmtDateTime(e.ts)}</span></div><div class="email-subject">${e.subject}</div><div class="email-body">${e.body}</div><div class="email-sent-tag">SENT</div></div>`).join('')}
+    db.emailLog.map(e=>`<div class="email-card"><div class="email-head"><span class="email-to">${e.to}</span><span class="email-time">${fmtDateTime(e.ts)}</span></div><div class="email-subject">${e.subject}</div><div class="email-body">${e.body}</div><div class="email-sent-tag" style="${e.status==='failed'?'background:var(--danger);':''}">${e.status==='failed'?'FAILED':'SENT'}</div></div>`).join('')}
   `;
 }
 
@@ -1208,17 +1266,19 @@ function renderAdminQuotes(){
   return `
     <div class="admin-banner">${t('quotes_intro')}</div>
     ${ordersWithPending.map(o=>{
-      const pendingItems = o.items.map((it,idx)=>({it,idx})).filter(x=>x.it.tipo==='other' && x.it.priceOverride==null);
+      // Keyed by the order_item's real uuid (not array index) — assign_item_price
+      // (T3 RPC) takes p_order_item_id, and indices aren't stable identifiers.
+      const pendingItems = o.items.filter(it=>it.tipo==='other' && it.priceOverride==null);
       return `
       <div class="order-card">
         <div class="row-top"><div><div class="oid">${o.id} · ${o.clientName}</div><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
-        ${pendingItems.map(x=>`
+        ${pendingItems.map(it=>`
           <div class="checkbox-row" style="align-items:flex-end;">
             <div style="flex:1;">
-              <label>${x.it.cant}× "${x.it.desc||t('other_ph')}"</label>
-              <input type="number" min="0" placeholder="${t('assign_price')}" data-quote-price="${o.id}::${x.idx}" value="${quotePriceDrafts[o.id+'::'+x.idx]||''}">
+              <label>${it.cant}× "${it.desc||t('other_ph')}"</label>
+              <input type="number" min="0" placeholder="${t('assign_price')}" data-quote-price="${it.id}" value="${quotePriceDrafts[it.id]||''}">
             </div>
-            <button class="btn btn-teal btn-sm" data-quote-save="${o.id}::${x.idx}">${t('save_price')}</button>
+            <button class="btn btn-teal btn-sm" data-quote-save="${it.id}">${t('save_price')}</button>
           </div>
         `).join('')}
       </div>`;
@@ -1241,49 +1301,110 @@ function renderAdminPricing(){
 }
 
 /* ============ EVENTOS ============ */
+/* ---- shared login helper for the three login buttons ---- */
+async function attemptLogin(expectedRoles, targetViewMode, tabAssign){
+  const emailEl = document.getElementById('login-email');
+  const passEl = document.getElementById('login-pass');
+  const email = (emailEl?.value||'').trim().toLowerCase();
+  const pass = (passEl?.value||'').trim();
+  if(!email || !pass){ toast(t('err_fill_all')); return; }
+  try{
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if(error){ toast(t('err_email_pass')); return; }
+    const { data: profile, error: profErr } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+    if(profErr || !profile){ await sb.auth.signOut(); toast(t('err_generic')); return; }
+    if(!expectedRoles.includes(profile.role)){ await sb.auth.signOut(); toast(t('err_role_mismatch')); return; }
+    session = { role: targetViewMode, userId: profile.id, actualRole: profile.role };
+    viewMode = targetViewMode;
+    if(tabAssign) tabAssign();
+    await loadDataForSession();
+    render();
+  } catch(e){ console.error('attemptLogin', e); toast(t('err_generic')); }
+}
+
 function bindEvents(){
   const app = document.getElementById('app');
 
   app.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{ lang = b.dataset.lang; render(); });
   app.querySelectorAll('[data-switch]').forEach(b=>b.onclick=()=>{
     const target = b.dataset.switch;
-    if(target==='cliente' && !session.userId){
-      session = {role:null, userId:null}; authScreen='login'; toast(lang==='is'?'Skráðu þig inn sem viðskiptavinur fyrst':'Sign in as a client first'); render(); return;
+    const allowed = target==='client' ? session.actualRole==='client'
+                  : target==='staff'  ? ['staff','admin'].includes(session.actualRole)
+                  : session.actualRole==='admin';
+    if(!allowed){
+      if(target==='client'){
+        session = {role:null, userId:null, actualRole:null}; authScreen='login';
+        toast(lang==='is'?'Skráðu þig inn sem viðskiptavinur fyrst':'Sign in as a client first');
+      } else {
+        toast(t('err_role_mismatch'));
+      }
+      render(); return;
     }
     viewMode = target; session.role = target; render();
   });
 
   const goReg = document.getElementById('go-registro'); if(goReg) goReg.onclick=()=>{authScreen='registro'; render();};
   const goLogin = document.getElementById('go-login'); if(goLogin) goLogin.onclick=()=>{authScreen='login'; render();};
+  const goForgot = document.getElementById('go-forgot'); if(goForgot) goForgot.onclick=()=>{authScreen='forgot'; render();};
+  const goLoginFromForgot = document.getElementById('go-login-from-forgot'); if(goLoginFromForgot) goLoginFromForgot.onclick=()=>{authScreen='login'; render();};
+
+  const btnSendReset = document.getElementById('btn-send-reset');
+  if(btnSendReset) btnSendReset.onclick = async ()=>{
+    const email = document.getElementById('forgot-email').value.trim().toLowerCase();
+    if(!email){ toast(t('err_fill_all')); return; }
+    try{
+      await sbAnon.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+      toast(t('reset_link_sent')); authScreen='login'; render();
+    } catch(e){ console.error('resetPasswordForEmail', e); toast(t('err_generic')); }
+  };
 
   const btnLogin = document.getElementById('btn-login');
-  if(btnLogin) btnLogin.onclick = ()=>{
-    const email = document.getElementById('login-email').value.trim().toLowerCase();
-    const pass = document.getElementById('login-pass').value.trim();
-    const user = db.users.find(u=>u.email.toLowerCase()===email && u.pass===pass);
-    if(!user){ toast(t('err_email_pass')); return; }
-    session = {role:'cliente', userId:user.id}; viewMode='cliente'; render();
-  };
+  if(btnLogin) btnLogin.onclick = ()=> attemptLogin(['client'], 'client', null);
   const btnStaffLogin = document.getElementById('btn-staff-login');
-  if(btnStaffLogin) btnStaffLogin.onclick = ()=>{ session={role:'staff',userId:null}; viewMode='staff'; staffTab='today'; render(); };
+  if(btnStaffLogin) btnStaffLogin.onclick = ()=> attemptLogin(['staff','admin'], 'staff', ()=>{ staffTab='today'; });
   const btnAdminLogin = document.getElementById('btn-admin-login');
-  if(btnAdminLogin) btnAdminLogin.onclick = ()=>{ session={role:'admin',userId:null}; viewMode='admin'; adminTab='reports'; render(); };
+  if(btnAdminLogin) btnAdminLogin.onclick = ()=> attemptLogin(['admin'], 'admin', ()=>{ adminTab='reports'; });
 
   const btnRegistro = document.getElementById('btn-registro');
-  if(btnRegistro) btnRegistro.onclick = ()=>{
+  if(btnRegistro) btnRegistro.onclick = async ()=>{
     const name = document.getElementById('reg-name').value.trim();
     const email = document.getElementById('reg-email').value.trim().toLowerCase();
     const phone = document.getElementById('reg-phone').value.trim();
     const pass = document.getElementById('reg-pass').value.trim();
     if(!name || !email || !phone || !pass){ toast(t('err_fill_all')); return; }
-    if(db.users.some(u=>u.email.toLowerCase()===email)){ toast(t('err_email_exists')); return; }
-    const newUser = {id:'u'+(db.users.length+1)+'_'+Date.now(), name, email, phone, pass, registeredAt:Date.now(), notificationsEnabled:true, isContract:false};
-    db.users.push(newUser); saveDB(db);
-    session = {role:'cliente', userId:newUser.id}; viewMode='cliente'; render();
+    if(pass.length < 6){ toast(t('err_password_short')); return; }
+    try{
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone } } });
+      if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
+      if(data.session){
+        const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+        session = { role:'client', userId:data.user.id, actualRole: profile ? profile.role : 'client' };
+        viewMode = 'client';
+        await loadDataForSession();
+        render();
+      } else {
+        toast(t('confirm_email_sent')); authScreen='login'; render();
+      }
+    } catch(e){ console.error('signUp', e); toast(t('err_generic')); }
   };
 
   const btnLogout = document.getElementById('btn-logout');
-  if(btnLogout) btnLogout.onclick = ()=>{ session={role:null,userId:null}; authScreen='login'; render(); };
+  if(btnLogout) btnLogout.onclick = async ()=>{ await sb.auth.signOut(); session={role:null,userId:null,actualRole:null}; authScreen='login'; render(); };
+
+  const btnSetPassword = document.getElementById('btn-set-password');
+  if(btnSetPassword) btnSetPassword.onclick = async ()=>{
+    const p1 = document.getElementById('recovery-pass').value.trim();
+    const p2 = document.getElementById('recovery-pass2').value.trim();
+    if(p1.length < 6){ toast(t('err_password_short')); return; }
+    if(p1 !== p2){ toast(t('err_password_mismatch')); return; }
+    try{
+      const { error } = await sb.auth.updateUser({ password: p1 });
+      if(error){ toast(t('err_generic')); return; }
+      await sb.auth.signOut();
+      session = {role:null, userId:null, actualRole:null}; authScreen='login';
+      toast(t('password_updated')); render();
+    } catch(e){ console.error('updateUser', e); toast(t('err_generic')); }
+  };
 
   const btnNueva = document.getElementById('btn-nueva-orden');
   if(btnNueva) btnNueva.onclick = ()=>{
@@ -1322,37 +1443,51 @@ function bindEvents(){
   const op = document.getElementById('orden-pickup'); if(op) op.onchange=()=>{ orderDraftMods.pickup=op.checked; render(); };
 
   const btnSubmitOrden = document.getElementById('btn-submit-orden');
-  if(btnSubmitOrden) btnSubmitOrden.onclick = ()=>{
+  if(btnSubmitOrden) btnSubmitOrden.onclick = async ()=>{
     const fecha = document.getElementById('orden-fecha').value;
     const comentarios = document.getElementById('orden-comentarios').value.trim();
     if(!fecha){ toast(t('err_pick_date')); return; }
     if(orderDraftItems.some(it=>it.tipo==='other' && !it.desc.trim())){ toast(t('err_other_desc')); return; }
 
-    let userId, clientName, user;
-    if(sheetMode==='manual'){
-      if(orderDraftManualClientId){
-        user = db.users.find(u=>u.id===orderDraftManualClientId);
-        userId = user.id; clientName = user.name;
-      } else if(orderDraftManualName.trim()){
-        userId = null; clientName = orderDraftManualName.trim(); user = null;
-      } else { toast(t('err_manual_client')); return; }
-    } else {
-      user = db.users.find(u=>u.id===session.userId);
-      if(!user){ toast(t('err_email_pass')); sheetOpen=false; session={role:null,userId:null}; authScreen='login'; render(); return; }
-      userId = user.id; clientName = user.name;
-    }
+    const itemsPayload = orderDraftItems.map(it=>({
+      product_id: it.tipo, qty: it.cant, price_override: null, desc: it.desc || null
+    }));
 
-    const itemsWithOverride = orderDraftItems.map(it=>({...it, priceOverride: it.priceOverride!=null?it.priceOverride:null}));
-    const newOrder = {
-      id:'ORD-'+(1000+db.orders.length+1), userId, clientName,
-      items:JSON.parse(JSON.stringify(itemsWithOverride)), fecha, comentarios,
-      estado:'en-cola', urgent:orderDraftMods.urgent, returnMethod:orderDraftMods.returnMethod, pickup:orderDraftMods.pickup,
-      problem:false, source: sheetMode==='manual' ? 'staff' : 'client', notas:[], creado:Date.now(), deliveredAt:null
-    };
-    db.orders.push(newOrder); saveDB(db);
-    if(user) notifyOrderCreated(user, newOrder);
-    sheetOpen = false; render();
-    toast(sheetMode==='manual' ? t('manual_order_logged') : t('order_sent'));
+    try{
+      if(sheetMode==='manual'){
+        let clientId = null, clientName = null;
+        if(orderDraftManualClientId){
+          const user = db.users.find(u=>u.id===orderDraftManualClientId);
+          if(!user){ toast(t('err_manual_client')); return; }
+          clientId = user.id; clientName = user.name;
+        } else if(orderDraftManualName.trim()){
+          clientId = null; clientName = orderDraftManualName.trim();
+        } else { toast(t('err_manual_client')); return; }
+
+        const { error } = await sb.rpc('log_manual_order', {
+          p_client_id: clientId, p_client_name: clientName, p_fecha: fecha,
+          p_comentarios: comentarios || null, p_urgent: orderDraftMods.urgent,
+          p_return_method: orderDraftMods.returnMethod, p_pickup: orderDraftMods.pickup,
+          p_items: itemsPayload
+        });
+        if(error) throw error;
+        toast(t('manual_order_logged'));
+      } else {
+        const { data: orderRow, error: orderErr } = await sb.from('orders').insert({
+          client_id: session.userId, client_name: null, fecha, comentarios: comentarios || null,
+          estado: 'en-cola', urgent: orderDraftMods.urgent, return_method: orderDraftMods.returnMethod,
+          pickup: orderDraftMods.pickup, source: 'client'
+        }).select().single();
+        if(orderErr) throw orderErr;
+        const { error: itemsErr } = await sb.from('order_items').insert(
+          itemsPayload.map(it=>({ order_id: orderRow.id, ...it }))
+        );
+        if(itemsErr) throw itemsErr;
+        toast(t('order_sent'));
+      }
+      await loadOrders();
+      sheetOpen = false; render();
+    } catch(e){ console.error('submit order', e); toast(t('err_generic')); }
   };
 
   app.querySelectorAll('[data-clientsubtab]').forEach(b=>b.onclick=()=>{ clientSubTab=b.dataset.clientsubtab; render(); });
@@ -1370,78 +1505,89 @@ function bindEvents(){
   if(btnAddClient) btnAddClient.onclick = ()=>{ addingClient = true; editingClientId=null; render(); };
   const cfCancel = document.getElementById('cf-cancel'); if(cfCancel) cfCancel.onclick = ()=>{ addingClient=false; render(); };
   const cfSave = document.getElementById('cf-save');
-  if(cfSave) cfSave.onclick = ()=>{
+  if(cfSave) cfSave.onclick = async ()=>{
     const name = document.getElementById('cf-name').value.trim();
     const email = document.getElementById('cf-email').value.trim().toLowerCase();
     const phone = document.getElementById('cf-phone').value.trim();
-    const pass = document.getElementById('cf-pass').value.trim() || '1234';
     const contractEl = document.getElementById('cf-contract');
     if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
-    if(db.users.some(u=>u.email.toLowerCase()===email)){ toast(t('err_email_exists')); return; }
-    db.users.push({id:'u'+(db.users.length+1)+'_'+Date.now(), name, email, phone, pass, registeredAt:Date.now(), notificationsEnabled:true, isContract: contractEl ? contractEl.checked : false});
-    saveDB(db); addingClient=false; toast(t('client_registered')); render();
+    try{
+      // Throwaway random password: the client never uses it — resetPasswordForEmail
+      // below sends them a link to set their own. sbAnon keeps this signUp from
+      // clobbering the staff/admin caller's own session.
+      const randomPass = Math.random().toString(36).slice(-10) + 'Aa1!';
+      const { data, error } = await sbAnon.auth.signUp({ email, password: randomPass, options: { data: { name, phone } } });
+      if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
+      if(contractEl && contractEl.checked){
+        const { error: updErr } = await sb.from('profiles').update({ is_contract: true }).eq('id', data.user.id);
+        if(updErr) console.error('set is_contract', updErr);
+      }
+      await sbAnon.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+      addingClient=false; toast(t('client_registered'));
+      await loadUsers(); render();
+    } catch(e){ console.error('register client', e); toast(t('err_generic')); }
   };
 
   app.querySelectorAll('[data-customize-client]').forEach(b=>b.onclick=()=>{ editingClientId=b.dataset.customizeClient; addingClient=false; render(); });
   const ceCancel = document.getElementById('ce-cancel'); if(ceCancel) ceCancel.onclick = ()=>{ editingClientId=null; render(); };
   const ceSave = document.getElementById('ce-save');
-  if(ceSave) ceSave.onclick = ()=>{
+  if(ceSave) ceSave.onclick = async ()=>{
     const u = db.users.find(x=>x.id===ceSave.dataset.editingClient);
     const name = document.getElementById('ce-name').value.trim();
     const email = document.getElementById('ce-email').value.trim().toLowerCase();
     const phone = document.getElementById('ce-phone').value.trim();
     if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
-    if(db.users.some(x=>x.id!==u.id && x.email.toLowerCase()===email)){ toast(t('err_email_exists')); return; }
-    u.name=name; u.email=email; u.phone=phone;
-    u.notificationsEnabled = document.getElementById('ce-notifications').checked;
-    u.isContract = document.getElementById('ce-contract').checked;
-    saveDB(db); editingClientId=null; toast(t('client_updated')); render();
+    try{
+      const { error } = await sb.from('profiles').update({
+        name, email, phone,
+        notifications_enabled: document.getElementById('ce-notifications').checked,
+        is_contract: document.getElementById('ce-contract').checked
+      }).eq('id', u.id);
+      if(error) throw error;
+      editingClientId=null; toast(t('client_updated'));
+      await loadUsers(); render();
+    } catch(e){ console.error('update client', e); toast(t('err_generic')); }
   };
   const ceResetPass = document.getElementById('ce-reset-pass');
-  if(ceResetPass) ceResetPass.onclick = ()=>{
+  if(ceResetPass) ceResetPass.onclick = async ()=>{
     const u = db.users.find(x=>x.id===ceResetPass.dataset.resetClient);
-    const newPass = Math.random().toString(36).slice(-6);
-    u.pass = newPass; saveDB(db);
-    alert(t('password_reset_note')+' '+newPass);
-    render();
+    if(!u) return;
+    try{
+      await sbAnon.auth.resetPasswordForEmail(u.email, { redirectTo: window.location.origin + window.location.pathname });
+      toast(t('password_reset_sent'));
+    } catch(e){ console.error('resetPasswordForEmail', e); toast(t('err_generic')); }
   };
 
-  app.querySelectorAll('[data-advance]').forEach(b=>b.onclick=()=>{
-    const o = db.orders.find(x=>x.id===b.dataset.advance);
-    const idx = ESTADOS.indexOf(o.estado);
-    if(idx < ESTADOS.length-1){
-      o.estado = ESTADOS[idx+1];
-      if(o.estado==='entregado') o.deliveredAt = Date.now();
-      o.notas.push('__status__:'+o.estado);
-      saveDB(db);
-      const user = db.users.find(u=>u.id===o.userId);
-      notifyStatusChanged(user, o, '');
-      render(); toast(t('order_updated'));
-    }
+  app.querySelectorAll('[data-advance]').forEach(b=>b.onclick=async ()=>{
+    try{
+      const { error } = await sb.rpc('advance_order_status', { p_order_id: b.dataset.advance });
+      if(error) throw error;
+      await loadOrders(); render(); toast(t('order_updated'));
+    } catch(e){ console.error('advance_order_status', e); toast(t('err_generic')); }
   });
-  app.querySelectorAll('[data-hold]').forEach(b=>b.onclick=()=>{
-    const o = db.orders.find(x=>x.id===b.dataset.hold);
-    o.problem = true; o.notas.push('__problem__'); saveDB(db);
-    const user = db.users.find(u=>u.id===o.userId);
-    notifyStatusChanged(user, o, t('problem_note'));
-    render(); toast(t('note_added'));
+  app.querySelectorAll('[data-hold]').forEach(b=>b.onclick=async ()=>{
+    try{
+      const { error } = await sb.rpc('flag_problem', { p_order_id: b.dataset.hold, p_flagged: true });
+      if(error) throw error;
+      await loadOrders(); render(); toast(t('note_added'));
+    } catch(e){ console.error('flag_problem', e); toast(t('err_generic')); }
   });
-  app.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=()=>{
-    const o = db.orders.find(x=>x.id===b.dataset.resolve);
-    o.problem = false; o.notas.push('__resolved__'); saveDB(db);
-    const user = db.users.find(u=>u.id===o.userId);
-    notifyStatusChanged(user, o, t('resolved_note'));
-    render(); toast(t('issue_resolved'));
+  app.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=async ()=>{
+    try{
+      const { error } = await sb.rpc('flag_problem', { p_order_id: b.dataset.resolve, p_flagged: false });
+      if(error) throw error;
+      await loadOrders(); render(); toast(t('issue_resolved'));
+    } catch(e){ console.error('flag_problem', e); toast(t('err_generic')); }
   });
-  app.querySelectorAll('[data-note-submit]').forEach(b=>b.onclick=()=>{
+  app.querySelectorAll('[data-note-submit]').forEach(b=>b.onclick=async ()=>{
     const id = b.dataset.noteSubmit;
     const input = app.querySelector(`[data-note-input="${id}"]`);
     const val = input.value.trim(); if(!val) return;
-    const o = db.orders.find(x=>x.id===id);
-    o.notas.push(val); saveDB(db);
-    const user = db.users.find(u=>u.id===o.userId);
-    notifyStatusChanged(user, o, val);
-    render(); toast(t('note_sent'));
+    try{
+      const { error } = await sb.rpc('add_order_note', { p_order_id: id, p_note: val });
+      if(error) throw error;
+      await loadOrders(); render(); toast(t('note_added'));
+    } catch(e){ console.error('add_order_note', e); toast(t('err_generic')); }
   });
 
   /* ---- Admin: products CRUD ---- */
@@ -1450,7 +1596,7 @@ function bindEvents(){
   app.querySelectorAll('[data-edit-product]').forEach(b=>b.onclick=()=>{ editingProductId=b.dataset.editProduct; addingProduct=false; render(); });
   const pfCancel = document.getElementById('pf-cancel'); if(pfCancel) pfCancel.onclick=()=>{ editingProductId=null; addingProduct=false; render(); };
   const pfSave = document.getElementById('pf-save');
-  if(pfSave) pfSave.onclick = ()=>{
+  if(pfSave) pfSave.onclick = async ()=>{
     const en = document.getElementById('pf-en').value.trim();
     const is = document.getElementById('pf-is').value.trim();
     const priceRaw = document.getElementById('pf-price').value;
@@ -1460,73 +1606,133 @@ function bindEvents(){
     const active = document.getElementById('pf-active').checked;
     if(!en || !is){ toast(t('err_product_fields')); return; }
     const editing = pfSave.dataset.editing;
-    if(editing==='new'){
-      const key = 'p_'+Date.now();
-      const maxOrder = Math.max(0, ...db.products.map(p=>p.sortOrder));
-      db.products.push({id:key, key, en, is, price, unit, category, active, sortOrder:maxOrder+1});
-      saveDB(db); addingProduct=false; toast(t('product_added'));
-    } else {
-      const p = db.products.find(x=>x.id===editing);
-      Object.assign(p, {en, is, price, unit, category, active});
-      saveDB(db); editingProductId=null; toast(t('product_updated'));
-    }
-    render();
+    try{
+      if(editing==='new'){
+        const key = 'p_'+Date.now();
+        const maxOrder = Math.max(0, ...db.products.map(p=>p.sortOrder));
+        const { error } = await sb.from('products').insert({
+          id: key, name_en: en, name_is: is, price, unit, category, active, sort_order: maxOrder+1
+        });
+        if(error) throw error;
+        addingProduct=false; toast(t('product_added'));
+      } else {
+        const { error } = await sb.from('products').update({
+          name_en: en, name_is: is, price, unit, category, active
+        }).eq('id', editing);
+        if(error) throw error;
+        editingProductId=null; toast(t('product_updated'));
+      }
+      await loadProducts(); render();
+    } catch(e){ console.error('save product', e); toast(t('err_generic')); }
   };
-  app.querySelectorAll('[data-toggle-active]').forEach(b=>b.onclick=()=>{
-    const p = db.products.find(x=>x.id===b.dataset.toggleActive); p.active = !p.active; saveDB(db); render();
+  app.querySelectorAll('[data-toggle-active]').forEach(b=>b.onclick=async ()=>{
+    const p = db.products.find(x=>x.id===b.dataset.toggleActive);
+    try{
+      const { error } = await sb.from('products').update({ active: !p.active }).eq('id', p.id);
+      if(error) throw error;
+      await loadProducts(); render();
+    } catch(e){ console.error('toggle active', e); toast(t('err_generic')); }
   });
-  app.querySelectorAll('[data-move-up]').forEach(b=>b.onclick=()=>{
+  app.querySelectorAll('[data-move-up]').forEach(b=>b.onclick=async ()=>{
     const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
     const idx = products.findIndex(p=>p.id===b.dataset.moveUp);
-    if(idx>0){ const tmp=products[idx].sortOrder; products[idx].sortOrder=products[idx-1].sortOrder; products[idx-1].sortOrder=tmp; saveDB(db); render(); }
+    if(idx>0){
+      const a = products[idx], bItem = products[idx-1];
+      try{
+        await Promise.all([
+          sb.from('products').update({ sort_order: bItem.sortOrder }).eq('id', a.id),
+          sb.from('products').update({ sort_order: a.sortOrder }).eq('id', bItem.id)
+        ]);
+        await loadProducts(); render();
+      } catch(e){ console.error('move up', e); toast(t('err_generic')); }
+    }
   });
-  app.querySelectorAll('[data-move-down]').forEach(b=>b.onclick=()=>{
+  app.querySelectorAll('[data-move-down]').forEach(b=>b.onclick=async ()=>{
     const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
     const idx = products.findIndex(p=>p.id===b.dataset.moveDown);
-    if(idx<products.length-1){ const tmp=products[idx].sortOrder; products[idx].sortOrder=products[idx+1].sortOrder; products[idx+1].sortOrder=tmp; saveDB(db); render(); }
+    if(idx<products.length-1){
+      const a = products[idx], bItem = products[idx+1];
+      try{
+        await Promise.all([
+          sb.from('products').update({ sort_order: bItem.sortOrder }).eq('id', a.id),
+          sb.from('products').update({ sort_order: a.sortOrder }).eq('id', bItem.id)
+        ]);
+        await loadProducts(); render();
+      } catch(e){ console.error('move down', e); toast(t('err_generic')); }
+    }
   });
-  app.querySelectorAll('[data-delete-product]').forEach(b=>b.onclick=()=>{
-    const used = db.orders.some(o=>o.items.some(it=>it.tipo===b.dataset.deleteProduct && db.products.find(p=>p.id===b.dataset.deleteProduct)?.key===it.tipo));
+  app.querySelectorAll('[data-delete-product]').forEach(b=>b.onclick=async ()=>{
+    const pid = b.dataset.deleteProduct;
+    const used = db.orders.some(o=>o.items.some(it=>it.tipo===pid));
     if(used){ toast(t('cannot_delete_used')); return; }
     if(!confirm(t('confirm_delete'))) return;
-    db.products = db.products.filter(p=>p.id!==b.dataset.deleteProduct);
-    saveDB(db); toast(t('product_deleted')); render();
+    try{
+      const { error } = await sb.from('products').delete().eq('id', pid);
+      if(error) throw error;
+      toast(t('product_deleted'));
+      await loadProducts(); render();
+    } catch(e){ console.error('delete product', e); toast(t('err_generic')); }
   });
 
   /* ---- Admin: pricing ---- */
   const btnSavePricing = document.getElementById('btn-save-pricing');
-  if(btnSavePricing) btnSavePricing.onclick = ()=>{
-    db.settings.expressPercent = Math.max(0, parseInt(document.getElementById('set-express').value)||0);
-    db.settings.deliveryFee = Math.max(0, parseInt(document.getElementById('set-delivery').value)||0);
-    db.settings.pickupFee = Math.max(0, parseInt(document.getElementById('set-pickup').value)||0);
-    db.settings.discountPercent = Math.max(0, parseInt(document.getElementById('set-discount').value)||0);
-    db.settings.deliveryEnabled = document.getElementById('set-delivery-enabled').checked;
-    db.settings.pickupEnabled = document.getElementById('set-pickup-enabled').checked;
-    saveDB(db); toast(t('pricing_saved')); render();
+  if(btnSavePricing) btnSavePricing.onclick = async ()=>{
+    const payload = {
+      express_percent: Math.max(0, parseInt(document.getElementById('set-express').value)||0),
+      delivery_fee: Math.max(0, parseInt(document.getElementById('set-delivery').value)||0),
+      pickup_fee: Math.max(0, parseInt(document.getElementById('set-pickup').value)||0),
+      discount_percent: Math.max(0, parseInt(document.getElementById('set-discount').value)||0),
+      delivery_enabled: document.getElementById('set-delivery-enabled').checked,
+      pickup_enabled: document.getElementById('set-pickup-enabled').checked
+    };
+    try{
+      const { error } = await sb.from('settings').update(payload).eq('id', 1);
+      if(error) throw error;
+      toast(t('pricing_saved'));
+      await loadSettings(); render();
+    } catch(e){ console.error('save pricing', e); toast(t('err_generic')); }
   };
 
   /* ---- Admin: quotes (assign price to "Other" items) ---- */
   app.querySelectorAll('[data-quote-price]').forEach(el=>el.oninput=()=>{ quotePriceDrafts[el.dataset.quotePrice] = el.value; });
-  app.querySelectorAll('[data-quote-save]').forEach(b=>b.onclick=()=>{
-    const [orderId, idxStr] = b.dataset.quoteSave.split('::');
-    const idx = parseInt(idxStr);
-    const val = quotePriceDrafts[b.dataset.quoteSave];
+  app.querySelectorAll('[data-quote-save]').forEach(b=>b.onclick=async ()=>{
+    const itemId = b.dataset.quoteSave;
+    const val = quotePriceDrafts[itemId];
     const price = parseInt(val);
     if(isNaN(price) || price<0){ toast(t('err_product_fields')); return; }
-    const o = db.orders.find(x=>x.id===orderId);
-    o.items[idx].priceOverride = price;
-    delete quotePriceDrafts[b.dataset.quoteSave];
-    saveDB(db);
-    const stillPending = o.items.some(it=>it.tipo==='other' && it.priceOverride==null);
-    if(!stillPending){
-      const user = db.users.find(u=>u.id===o.userId);
-      if(user) notifyStatusChanged(user, o, t('quote_confirmed_note'));
-    }
-    toast(t('price_assigned')); render();
+    try{
+      const { error } = await sb.rpc('assign_item_price', { p_order_item_id: itemId, p_price: price });
+      if(error) throw error;
+      delete quotePriceDrafts[itemId];
+      toast(t('price_assigned'));
+      await loadOrders(); render();
+    } catch(e){ console.error('assign_item_price', e); toast(t('err_generic')); }
   });
 }
 
-render();
+/* ============ BOOTSTRAP ============ */
+sb.auth.onAuthStateChange((event, _authSession)=>{
+  if(event === 'PASSWORD_RECOVERY'){
+    authScreen = 'recovery';
+    render();
+  }
+});
+
+(async function bootstrap(){
+  try{
+    const { data: { session: authSession } } = await sb.auth.getSession();
+    if(authSession){
+      const { data: profile, error } = await sb.from('profiles').select('*').eq('id', authSession.user.id).single();
+      if(!error && profile){
+        session = { role: profile.role, userId: profile.id, actualRole: profile.role };
+        viewMode = profile.role;
+        await loadDataForSession();
+      }
+    }
+  } catch(e){ console.error('bootstrap session restore', e); }
+  render();
+  startPolling();
+})();
 </script>
 </body>
 </html>

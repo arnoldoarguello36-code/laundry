@@ -211,7 +211,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: Architecture review — email trigger design; Outside voice — AFTER-trigger transactional semantics need an explicit async mechanism, per-item email batching gap
   - Files: `supabase/migrations/`
   - Verify: editing comentarios does not fire an email; changing estado does, exactly once; pricing 3 pending items on one order sends exactly one price-assigned email; Resend latency does not add measurable latency to the triggering write (pg_net queues async)
-- [ ] **T5 (P1, human: ~2-3 days / CC: ~1-1.5h)** — port — Replace `localStorage` calls in the HTML file with Supabase client calls behind the existing `db` in-memory cache; wrap mutations in try/catch → toast() on failure; add a 20s polling refresh on staff/admin Today/Orders views
+- [x] **T5 (P1, human: ~2-3 days / CC: ~1-1.5h)** — port — Replace `localStorage` calls in the HTML file with Supabase client calls behind the existing `db` in-memory cache; wrap mutations in try/catch → toast() on failure; add a 20s polling refresh on staff/admin Today/Orders views
   - Surfaced by: Architecture review — async/sync bridge; Code quality review — write failure handling; Outside voice — no Realtime replacement, T5 depends on T2+T3 not just T1
   - Files: the HTML/JS prototype file (to be moved into the new repo)
   - Verify: E2E signup → order → status-change → delivered flow works against a live Supabase project; staff view reflects a new order within 20s without manual refresh
