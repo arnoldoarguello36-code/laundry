@@ -10,6 +10,11 @@
 -- let plain staff write another user's row, which it deliberately doesn't.
 -- Routing phone through the same SECURITY DEFINER insert that already sets
 -- name/email sidesteps that RLS gap instead of loosening the policy.
+--
+-- T7 note: preferred_lang now comes from signup metadata too (the T5 signup
+-- form's language selector, new.raw_user_meta_data ->> 'preferred_lang'),
+-- defaulting to 'is' via coalesce for any signup that doesn't set it (e.g. a
+-- future signup path, or a metadata payload predating this field).
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -18,7 +23,13 @@ set search_path = public, pg_temp
 as $$
 begin
   insert into public.profiles (id, name, email, phone, preferred_lang)
-  values (new.id, new.raw_user_meta_data ->> 'name', new.email, new.raw_user_meta_data ->> 'phone', 'is');
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'name',
+    new.email,
+    new.raw_user_meta_data ->> 'phone',
+    coalesce(new.raw_user_meta_data ->> 'preferred_lang', 'is')
+  );
   return new;
 end;
 $$;

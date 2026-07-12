@@ -354,7 +354,10 @@ const I18N = {
     password_updated:"Password updated — please sign in", err_password_mismatch:"Passwords don't match",
     err_password_short:"Password must be at least 6 characters",
     confirm_email_sent:"Account created — check your email to confirm before signing in.",
-    err_role_mismatch:"That login isn't valid for this account type", err_generic:"Something went wrong — please try again"
+    err_role_mismatch:"That login isn't valid for this account type", err_generic:"Something went wrong — please try again",
+    preferred_lang_label:"Email language", lang_option_is:"Íslenska", lang_option_en:"English",
+    tab_failed_emails:"Failed emails", no_failed_emails_title:"No failed emails",
+    no_failed_emails_sub:"Every order/status/price email has sent successfully."
   },
   is: {
     brand_name:"Norðurljós", brand_tag:"Þvottahús og fatahreinsun",
@@ -477,7 +480,10 @@ const I18N = {
     password_updated:"Lykilorð uppfært — skráðu þig inn", err_password_mismatch:"Lykilorð stemma ekki",
     err_password_short:"Lykilorð verður að vera minnst 6 stafir",
     confirm_email_sent:"Aðgangur stofnaður — athugaðu tölvupóstinn til að staðfesta áður en þú skráir þig inn.",
-    err_role_mismatch:"Þessi innskráning gildir ekki fyrir þessa tegund aðgangs", err_generic:"Eitthvað fór úrskeiðis — reyndu aftur"
+    err_role_mismatch:"Þessi innskráning gildir ekki fyrir þessa tegund aðgangs", err_generic:"Eitthvað fór úrskeiðis — reyndu aftur",
+    preferred_lang_label:"Tungumál tölvupósts", lang_option_is:"Íslenska", lang_option_en:"English",
+    tab_failed_emails:"Ósendir tölvupóstar", no_failed_emails_title:"Engir ósendir tölvupóstar",
+    no_failed_emails_sub:"Allir pöntunar-/stöðu-/verð-tölvupóstar hafa sendst."
   }
 };
 let lang = 'en';
@@ -582,6 +588,12 @@ async function loadDataForSession(){
   // list for staff/admin. A plain client needs their own row present in
   // db.users for the "Hi, {name}" greeting in renderClienteView().
   await Promise.all([loadOrders(), loadUsers()]);
+  // email_log is staff/admin-only per RLS (T8's failed-email admin panel and
+  // the staff "emails" tab both read db.emailLog) — no point fetching it for
+  // a plain client, who'd get an RLS-empty result anyway.
+  if(session.actualRole === 'staff' || session.actualRole === 'admin'){
+    await loadEmailLog();
+  }
 }
 
 /* ---- 20s polling refresh for staff/admin (skipped while a form is open, so it never clobbers in-progress edits) ---- */
@@ -589,7 +601,7 @@ function startPolling(){
   setInterval(async ()=>{
     if(!session.role || session.role === 'client') return;
     if(sheetOpen || addingClient || editingClientId || addingProduct || editingProductId) return;
-    await loadOrders();
+    await Promise.all([loadOrders(), loadEmailLog()]);
     render();
   }, 20000);
 }
@@ -703,6 +715,13 @@ function renderAuth(){
     <div class="field"><label>${t('email')}</label><input id="reg-email" type="email" placeholder="jon@example.is"></div>
     <div class="field"><label>${t('phone')}</label><input id="reg-phone" type="tel" placeholder="555-0199"></div>
     <div class="field"><label>${t('pass')}</label><input id="reg-pass" type="password" placeholder="${t('create_pass')}"></div>
+    <div class="field">
+      <label>${t('preferred_lang_label')}</label>
+      <select id="reg-preferred-lang">
+        <option value="is" ${lang==='is'?'selected':''}>${t('lang_option_is')}</option>
+        <option value="en" ${lang==='en'?'selected':''}>${t('lang_option_en')}</option>
+      </select>
+    </div>
     <button class="btn btn-primary" id="btn-registro">${t('btn_create_account')}</button>
     <div class="switch-link">${t('have_account')} <a id="go-login">${t('login_link')}</a></div>
   </div>`;
@@ -1185,9 +1204,14 @@ function renderReports(){
 
 /* ============ ADMIN ============ */
 function renderAdminView(){
-  const tabs = ['reports','quotes','products','pricing','orders','clients'];
+  const tabs = ['reports','quotes','products','pricing','orders','clients','failed'];
   const pendingQuoteCount = db.orders.reduce((s,o)=>s+o.items.filter(it=>it.tipo==='other' && it.priceOverride==null).length,0);
-  const tabLabels = {reports:t('reports_tab'), quotes:t('tab_quotes')+(pendingQuoteCount?` (${pendingQuoteCount})`:''), products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab')};
+  const failedEmailCount = db.emailLog.filter(e=>e.status==='failed').length;
+  const tabLabels = {
+    reports:t('reports_tab'), quotes:t('tab_quotes')+(pendingQuoteCount?` (${pendingQuoteCount})`:''),
+    products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab'),
+    failed:t('tab_failed_emails')+(failedEmailCount?` (${failedEmailCount})`:'')
+  };
   return `
   <div class="content">
     <div class="section-title">${t('admin_panel')}</div>
@@ -1197,12 +1221,21 @@ function renderAdminView(){
       : adminTab==='products' ? renderAdminProducts()
       : adminTab==='pricing' ? renderAdminPricing()
       : adminTab==='orders' ? renderStaffOrders()
+      : adminTab==='failed' ? renderAdminFailedEmails()
       : renderStaffClients()}
   </div>
   <div class="bottomnav">
     <button class="active"><span class="ic">🛠️</span>${t('admin_panel')}</button>
     <button id="btn-logout"><span class="ic">↩</span>${t('logout')}</button>
   </div>`;
+}
+
+function renderAdminFailedEmails(){
+  const failed = db.emailLog.filter(e=>e.status==='failed');
+  return `
+    ${failed.length===0 ? `<div class="empty-state"><div class="glyph">✅</div><h3>${t('no_failed_emails_title')}</h3><p>${t('no_failed_emails_sub')}</p></div>` :
+    failed.map(e=>`<div class="email-card"><div class="email-head"><span class="email-to">${e.to}</span><span class="email-time">${fmtDateTime(e.ts)}</span></div><div class="email-subject">${e.subject}</div><div class="email-body">${e.body}</div><div class="email-sent-tag" style="background:var(--danger);">FAILED</div></div>`).join('')}
+  `;
 }
 
 function productEditFormHtml(p){
@@ -1371,10 +1404,12 @@ function bindEvents(){
     const email = document.getElementById('reg-email').value.trim().toLowerCase();
     const phone = document.getElementById('reg-phone').value.trim();
     const pass = document.getElementById('reg-pass').value.trim();
+    const preferredLangEl = document.getElementById('reg-preferred-lang');
+    const preferredLang = preferredLangEl ? preferredLangEl.value : 'is';
     if(!name || !email || !phone || !pass){ toast(t('err_fill_all')); return; }
     if(pass.length < 6){ toast(t('err_password_short')); return; }
     try{
-      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone } } });
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang } } });
       if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
       if(data.session){
         const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();

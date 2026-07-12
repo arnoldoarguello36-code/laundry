@@ -1,0 +1,97 @@
+name: Nightly database backup
+
+# T10: zero backup posture is not an acceptable baseline for a live revenue
+# business. This dumps the production Postgres database every night and
+# ships it to external (non-Supabase) storage, so a Supabase-side incident
+# doesn't take the only copy of the data with it.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_DB_URL        - full Postgres connection string for the
+#                             production project, e.g.
+#                             postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres
+#                             (Supabase dashboard -> Project Settings ->
+#                             Database -> Connection string -> URI. Use the
+#                             session pooler / direct connection, not the
+#                             transaction pooler on port 6543 - pg_dump needs
+#                             a plain session connection.)
+#   BACKUP_S3_BUCKET        - destination bucket name, e.g. norduljos-backups
+#   BACKUP_S3_ENDPOINT      - (optional) S3-compatible endpoint URL if not
+#                             using AWS S3 proper, e.g. a Cloudflare R2 or
+#                             Backblaze B2 endpoint. Leave unset for AWS S3.
+#   AWS_ACCESS_KEY_ID       - credential for the bucket above
+#   AWS_SECRET_ACCESS_KEY   - credential for the bucket above
+#
+# The bucket should have its own retention/versioning policy independent of
+# this workflow (e.g. S3 lifecycle rule) - this workflow just uploads one
+# dump per day, it does not prune old ones.
+
+on:
+  schedule:
+    # 03:15 UTC daily - after the shop's business hours in Iceland (UTC+0,
+    # no DST), low-traffic window.
+    - cron: '15 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Dump database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set - see workflow comments for setup"
+            exit 1
+          fi
+          STAMP="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+          echo "DUMP_STAMP=$STAMP" >> "$GITHUB_ENV"
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom \
+            --no-owner \
+            --no-privileges \
+            --file="norduljos-${STAMP}.dump"
+          gzip -9 "norduljos-${STAMP}.dump"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: auto
+
+      - name: Upload to external storage
+        env:
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_S3_BUCKET:-}" ]; then
+            echo "::error::BACKUP_S3_BUCKET secret is not set - see workflow comments for setup"
+            exit 1
+          fi
+          ENDPOINT_ARG=()
+          if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then
+            ENDPOINT_ARG=(--endpoint-url "$BACKUP_S3_ENDPOINT")
+          fi
+          aws s3 cp "${ENDPOINT_ARG[@]}" \
+            "norduljos-${DUMP_STAMP}.dump.gz" \
+            "s3://${BACKUP_S3_BUCKET}/norduljos-${DUMP_STAMP}.dump.gz"
+
+      - name: Verify upload
+        env:
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          ENDPOINT_ARG=()
+          if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then
+            ENDPOINT_ARG=(--endpoint-url "$BACKUP_S3_ENDPOINT")
+          fi
+          aws s3 ls "${ENDPOINT_ARG[@]}" "s3://${BACKUP_S3_BUCKET}/norduljos-${DUMP_STAMP}.dump.gz"

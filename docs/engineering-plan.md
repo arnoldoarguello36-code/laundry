@@ -219,22 +219,24 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: Architecture review — email language persistence, non-blocking email
   - Files: `supabase/functions/`
   - Verify: Resend API key invalid → order/status write still succeeds, email_log shows failed
-- [ ] **T7 (P2, human: ~30min / CC: ~5min)** — signup — Add `preferred_lang` field to client signup form, default 'is'
+- [x] **T7 (P2, human: ~30min / CC: ~5min)** — signup — Add `preferred_lang` field to client signup form, default 'is'
   - Surfaced by: Architecture review — email language persistence
   - Files: HTML signup form
   - Verify: new signup writes preferred_lang; email uses it
-- [ ] **T8 (P2, human: ~1-2h / CC: ~15min)** — admin UI — Add a filtered admin view/panel listing `email_log` rows with `status='failed'`, reusing existing admin screen patterns
+- [x] **T8 (P2, human: ~1-2h / CC: ~15min)** — admin UI — Add a filtered admin view/panel listing `email_log` rows with `status='failed'`, reusing existing admin screen patterns
   - Surfaced by: Outside voice — no failure visibility for failed email sends
   - Files: HTML admin section
   - Verify: forcing a Resend failure produces a visible row in the admin failed-email view
-- [ ] **T9 (P1, human: ~2-3h / CC: ~15min)** — infra — Stand up a second (free-tier) Supabase project as staging; write a cutover checklist (final data check, DNS/domain switch, first-real-order smoke test) and a rollback note (temporary revert to phone/paper)
+- [x] **T9 (P1, human: ~2-3h / CC: ~15min)** — infra — Stand up a second (free-tier) Supabase project as staging; write a cutover checklist (final data check, DNS/domain switch, first-real-order smoke test) and a rollback note (temporary revert to phone/paper)
   - Surfaced by: Outside voice — no staging/cutover/rollback plan for a live business
   - Files: none (infra + a `CUTOVER.md`-style doc in the new repo)
   - Verify: full E2E flow runs clean against staging before the prod cutover checklist is executed
-- [ ] **T10 (P2, human: ~1h / CC: ~10min)** — backups — Automate daily `pg_dump` (e.g. scheduled GitHub Action) writing to external storage
+  - Status note: `CUTOVER.md` (checklist + rollback note) is written. Actually provisioning the staging Supabase project and running the E2E checklist against it is a human action requiring account/CLI access this environment doesn't have — not yet done, tracked as the first unchecked box inside `CUTOVER.md` itself.
+- [x] **T10 (P2, human: ~1h / CC: ~10min)** — backups — Automate daily `pg_dump` (e.g. scheduled GitHub Action) writing to external storage
   - Surfaced by: Outside voice — zero backup posture is an unacceptable baseline risk for a live revenue business, not a deferrable v1 cut
   - Files: `.github/workflows/`
   - Verify: a scheduled run produces a restorable dump; a manual restore-to-fresh-project dry run succeeds at least once before launch
+  - Status note: `.github/workflows/db-backup.yml` (nightly `pg_dump` -> S3-compatible bucket) and `docs/backups.md` (restore runbook) are written. The workflow needs its 5 repo secrets set before it can run, and the manual restore dry run itself still needs to be performed once before launch — see `docs/backups.md`.
 
 _No new tasks from Performance review — reports stay client-side JS as today, no change needed._
 
