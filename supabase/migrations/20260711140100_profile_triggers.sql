@@ -3,6 +3,13 @@
 -- (unpinned search_path on a security-definer function is a schema-injection
 -- privilege-escalation vector).
 
+-- T5 note: also captures phone from signup metadata (new.raw_user_meta_data
+-- ->> 'phone'). Needed so the T5 "staff registers a client" flow can set a
+-- new client's phone number at creation time — a direct UPDATE afterward
+-- would require the T2 profiles_update policy (id = auth.uid() OR admin) to
+-- let plain staff write another user's row, which it deliberately doesn't.
+-- Routing phone through the same SECURITY DEFINER insert that already sets
+-- name/email sidesteps that RLS gap instead of loosening the policy.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -10,8 +17,8 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  insert into public.profiles (id, name, email, preferred_lang)
-  values (new.id, new.raw_user_meta_data ->> 'name', new.email, 'is');
+  insert into public.profiles (id, name, email, phone, preferred_lang)
+  values (new.id, new.raw_user_meta_data ->> 'name', new.email, new.raw_user_meta_data ->> 'phone', 'is');
   return new;
 end;
 $$;

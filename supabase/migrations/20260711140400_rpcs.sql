@@ -6,6 +6,12 @@
 -- Server computes the next state from the ESTADOS pipeline order; caller
 -- cannot set an arbitrary state, only "advance one step." Sets delivered_at
 -- when reaching the final state.
+--
+-- T5 note: also appends a structured notas entry ({kind:'status', estado,
+-- at}) so the client-facing order card's activity feed shows "status
+-- updated to X" inline, matching the prototype's UX. add_order_note and
+-- flag_problem below use the same {kind, ..., at} shape so the front end
+-- can render all three note types (free-text, status, problem) uniformly.
 create or replace function public.advance_order_status(p_order_id text)
 returns text
 language plpgsql
@@ -36,7 +42,8 @@ begin
 
   update public.orders
   set estado = v_next,
-      delivered_at = case when v_next = 'entregado' then now() else delivered_at end
+      delivered_at = case when v_next = 'entregado' then now() else delivered_at end,
+      notas = notas || jsonb_build_array(jsonb_build_object('kind', 'status', 'estado', v_next, 'at', now()))
   where id = p_order_id;
 
   return v_next;
@@ -56,7 +63,7 @@ begin
   end if;
 
   update public.orders
-  set notas = notas || jsonb_build_array(jsonb_build_object('text', p_note, 'at', now(), 'by', auth.uid()))
+  set notas = notas || jsonb_build_array(jsonb_build_object('kind', 'note', 'text', p_note, 'at', now(), 'by', auth.uid()))
   where id = p_order_id;
 
   if not found then
@@ -77,7 +84,10 @@ begin
     raise exception 'not authorized';
   end if;
 
-  update public.orders set problem = p_flagged where id = p_order_id;
+  update public.orders
+  set problem = p_flagged,
+      notas = notas || jsonb_build_array(jsonb_build_object('kind', case when p_flagged then 'problem' else 'resolved' end, 'at', now()))
+  where id = p_order_id;
 
   if not found then
     raise exception 'order not found';
