@@ -157,6 +157,12 @@
   .chart-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
   .chart-card h3{font-size:14px;margin:0 0 3px;}
   .chart-card .chart-sub{font-size:11.5px;color:#8a929e;margin:0 0 12px;}
+  .table-scroll{overflow-x:auto;margin:10px 0;}
+  table.volume-table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap;}
+  table.volume-table th,table.volume-table td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;}
+  table.volume-table th:first-child,table.volume-table td:first-child{text-align:left;}
+  table.volume-table thead th{color:#8a929e;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;}
+  table.volume-table tfoot td{border-top:2px solid var(--line);border-bottom:none;}
 
   .today-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
   .today-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px;cursor:pointer;text-align:left;font-family:inherit;box-shadow:var(--shadow-sm);transition:transform .12s, box-shadow .12s;}
@@ -261,7 +267,11 @@ const I18N = {
     note_sent:"Note sent to client by email", issue_resolved:"Issue marked as resolved",
     staff_panel:"Staff panel", admin_panel:"Admin panel",
     tab_today:"Today", orders_tab:"Orders", clients_tab:"Clients", reports_tab:"Reports", emails_tab:"Emails",
-    tab_products:"Products", tab_pricing:"Pricing",
+    tab_products:"Products", tab_pricing:"Pricing", tab_volume:"Volume",
+    rep_volume:"Volume processed", rep_volume_sub:"Kilos/units processed per day — billing basis for contract clients.",
+    rep_volume_start:"Start date", rep_volume_end:"End date", rep_volume_client:"Client",
+    rep_volume_all_clients:"All clients", rep_volume_day:"Day", rep_volume_total:"Total",
+    rep_volume_export:"Export to Excel (CSV)",
     all:"All", client_label:"Client:", all_clients:"All clients",
     no_orders_filter:"No orders here", no_orders_filter_sub:"There are no orders matching this filter yet.",
     client_says:"Client", advance_to:"Advance to", flag_issue:"Flag issue", resolve_issue:"Resolve issue",
@@ -288,6 +298,7 @@ const I18N = {
     admin_intro:"Manage your catalog, pricing and view business reports — no code required.",
     add_product:"+ Add product", product_name_en:"Name (English)", product_name_is:"Name (Icelandic)",
     product_price:"Price (ISK)", product_unit:"Unit", product_category:"Category", product_active:"Available to clients",
+    product_staff_only:"Staff only (hidden from client order form)",
     unit_pc:"per piece", unit_kg:"per kg", unit_set:"per set",
     save:"Save", edit:"Edit", delete:"Delete", confirm_delete:"Delete this product? This can't be undone.",
     cannot_delete_used:"This product is used in existing orders. Deactivate it instead of deleting.",
@@ -387,7 +398,11 @@ const I18N = {
     note_sent:"Athugasemd send í tölvupósti", issue_resolved:"Vandamál merkt leyst",
     staff_panel:"Stjórnborð starfsfólks", admin_panel:"Stjórnendaborð",
     tab_today:"Í dag", orders_tab:"Pantanir", clients_tab:"Viðskiptavinir", reports_tab:"Skýrslur", emails_tab:"Tölvupóstar",
-    tab_products:"Vörur", tab_pricing:"Verðskrá",
+    tab_products:"Vörur", tab_pricing:"Verðskrá", tab_volume:"Magn",
+    rep_volume:"Unnið magn", rep_volume_sub:"Kíló/stykki unnin á dag — grunnur fyrir reikningagerð samningsviðskiptavina.",
+    rep_volume_start:"Upphafsdagur", rep_volume_end:"Lokadagur", rep_volume_client:"Viðskiptavinur",
+    rep_volume_all_clients:"Allir viðskiptavinir", rep_volume_day:"Dagur", rep_volume_total:"Samtals",
+    rep_volume_export:"Flytja út í Excel (CSV)",
     all:"Allt", client_label:"Viðskiptavinur:", all_clients:"Allir viðskiptavinir",
     no_orders_filter:"Engar pantanir hér", no_orders_filter_sub:"Engar pantanir passa við þessa síu ennþá.",
     client_says:"Viðskiptavinur", advance_to:"Færa í", flag_issue:"Merkja vandamál", resolve_issue:"Merkja leyst",
@@ -414,6 +429,7 @@ const I18N = {
     admin_intro:"Sýslaðu með vörulista, verð og skoðaðu rekstrarskýrslur — engin kóðun nauðsynleg.",
     add_product:"+ Bæta við vöru", product_name_en:"Nafn (enska)", product_name_is:"Nafn (íslenska)",
     product_price:"Verð (ISK)", product_unit:"Eining", product_category:"Flokkur", product_active:"Sýnilegt viðskiptavinum",
+    product_staff_only:"Aðeins starfsfólk (falið í pöntunarformi viðskiptavina)",
     unit_pc:"per stykki", unit_kg:"per kg", unit_set:"per sett",
     save:"Vista", edit:"Breyta", delete:"Eyða", confirm_delete:"Eyða þessari vöru? Ekki hægt að afturkalla.",
     cannot_delete_used:"Þessi vara er notuð í pöntunum. Gerðu hana óvirka í staðinn fyrir að eyða.",
@@ -497,7 +513,14 @@ function isToday(ts){ return new Date(ts).toDateString() === new Date().toDateSt
 function isOverdue(o){ return o.fecha < todayISO() && o.estado !== 'entregado'; }
 
 function priceEntry(key){ return db.products.find(p=>p.key===key) || db.products.find(p=>p.key==='other'); }
-function activeProducts(){ return [...db.products].filter(p=>p.active).sort((a,b)=>a.sortOrder-b.sortOrder); }
+// Staff-only products (e.g. "Gull"/kilos amarillos) are hidden from the
+// client-facing self-service order sheet (sheetMode==='client') but remain
+// selectable in the staff/admin manual-order sheet (sheetMode==='manual').
+// This is a client-side convenience filter only — the real enforcement is
+// the order_items_insert_client RLS policy (staff_only_products migration),
+// which rejects a client-originated insert referencing a staff-only product
+// regardless of what the UI shows.
+function activeProducts(){ return [...db.products].filter(p=>p.active && (!p.staffOnly || sheetMode==='manual')).sort((a,b)=>a.sortOrder-b.sortOrder); }
 function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }
 
 function computeItemCost(it){
@@ -535,7 +558,7 @@ function mapProfile(p){
   return { id:p.id, name:p.name, email:p.email, phone:p.phone, registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, role: p.role, preferredLang: p.preferred_lang };
 }
 function mapProduct(p){
-  return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order };
+  return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order, staffOnly: !!p.staff_only };
 }
 function mapSettings(s){
   return { expressPercent:Number(s.express_percent), deliveryFee:Number(s.delivery_fee), pickupFee:Number(s.pickup_fee), discountPercent:Number(s.discount_percent), deliveryEnabled:s.delivery_enabled, pickupEnabled:s.pickup_enabled };
@@ -626,6 +649,11 @@ let addingClient = false;
 let editingClientId = null;
 let clientSubTab = 'active'; // 'active' | 'history'
 let quotePriceDrafts = {};
+// T-contract-volume: admin "Volume" report date range, defaults to the
+// trailing 7 days (inclusive) so the tab is useful on first open.
+let volumeStart = (()=>{ const d=new Date(); d.setDate(d.getDate()-6); return d.toISOString().slice(0,10); })();
+let volumeEnd = todayISO();
+let volumeClientFilter = 'all'; // 'all' | a client (profile) id
 
 function toast(msg){
   const el = document.getElementById('toast');
@@ -1146,6 +1174,91 @@ function computeReports(){
     avgTurnaroundHrs,days,overdueList,urgentList,problemList,waitingList,revenueByClient};
 }
 
+/* ---- T-contract-volume: daily kilos/units processed report (billing basis
+   for contract clients like HSN Husavik and Hvammur, but works for any
+   client) ---- */
+function fmtQty(v, unit){ return unit==='kg' ? (Math.round(v*10)/10).toLocaleString(lang==='is'?'is-IS':'en-GB') : Math.round(v).toLocaleString(lang==='is'?'is-IS':'en-GB'); }
+function csvEscape(v){ const s=String(v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+
+function computeVolumeReport(startISO, endISO, clientId){
+  const start = new Date(startISO+'T00:00:00');
+  const end = new Date(endISO+'T00:00:00'); end.setDate(end.getDate()+1); // exclusive upper bound
+  const orders = db.orders.filter(o=>{
+    if(o.creado < start.getTime() || o.creado >= end.getTime()) return false;
+    if(clientId && clientId!=='all' && o.userId!==clientId) return false;
+    return true;
+  });
+  const productIds = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder).map(p=>p.id);
+  const byDay = {}; const totals = {};
+  orders.forEach(o=>{
+    const d = new Date(o.creado); d.setHours(0,0,0,0);
+    const key = d.toISOString().slice(0,10);
+    byDay[key] = byDay[key] || {};
+    o.items.forEach(it=>{
+      byDay[key][it.tipo] = (byDay[key][it.tipo]||0) + it.cant;
+      totals[it.tipo] = (totals[it.tipo]||0) + it.cant;
+    });
+  });
+  const activeProductIds = productIds.filter(id=>totals[id]);
+  const days = [];
+  for(let d=new Date(start); d<end; d.setDate(d.getDate()+1)){
+    const key = d.toISOString().slice(0,10);
+    days.push({date:key, values: byDay[key]||{}});
+  }
+  return { days, activeProductIds, totals, orderCount: orders.length };
+}
+
+function renderVolumeReport(){
+  const contractClients = db.users.filter(u=>u.isContract);
+  const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
+  const productLabel = (id)=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${t('unit_'+p.unit)})` : id; };
+  return `
+    <div class="chart-card">
+      <h3>${t('rep_volume')}</h3><p class="chart-sub">${t('rep_volume_sub')}</p>
+      <div class="form-row2">
+        <div class="field"><label>${t('rep_volume_start')}</label><input type="date" id="vol-start" value="${volumeStart}" max="${volumeEnd}"></div>
+        <div class="field"><label>${t('rep_volume_end')}</label><input type="date" id="vol-end" value="${volumeEnd}" min="${volumeStart}" max="${todayISO()}"></div>
+      </div>
+      <div class="field">
+        <label>${t('rep_volume_client')}</label>
+        <select id="vol-client">
+          <option value="all" ${volumeClientFilter==='all'?'selected':''}>${t('rep_volume_all_clients')}</option>
+          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${c.name}</option>`).join('')}
+        </select>
+      </div>
+      ${r.activeProductIds.length===0 ? `<p class="chart-sub">${t('rep_no_data')}</p>` : `
+      <div class="table-scroll">
+        <table class="volume-table">
+          <thead><tr><th>${t('rep_volume_day')}</th>${r.activeProductIds.map(id=>`<th>${productLabel(id)}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${r.days.map(day=>`<tr><td>${fmtFecha(day.date)}</td>${r.activeProductIds.map(id=>`<td>${day.values[id]?fmtQty(day.values[id], (db.products.find(p=>p.id===id)||{}).unit):'—'}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr><td><b>${t('rep_volume_total')}</b></td>${r.activeProductIds.map(id=>`<td><b>${fmtQty(r.totals[id], (db.products.find(p=>p.id===id)||{}).unit)}</b></td>`).join('')}</tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
+      `}
+    </div>
+  `;
+}
+
+function exportVolumeCSV(){
+  const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
+  if(r.activeProductIds.length===0){ toast(t('rep_no_data')); return; }
+  const header = [t('rep_volume_day'), ...r.activeProductIds.map(id=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${p.unit})` : id; })];
+  const rows = r.days.map(day=>[day.date, ...r.activeProductIds.map(id=> day.values[id]||0)]);
+  const totalsRow = [t('rep_volume_total'), ...r.activeProductIds.map(id=> r.totals[id]||0)];
+  const csv = [header, ...rows, totalsRow].map(row=>row.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `norduljos-volumen_${volumeStart}_${volumeEnd}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function renderReports(){
   const r = computeReports();
   const showMoney = session.role === 'admin';
@@ -1204,11 +1317,11 @@ function renderReports(){
 
 /* ============ ADMIN ============ */
 function renderAdminView(){
-  const tabs = ['reports','quotes','products','pricing','orders','clients','failed'];
+  const tabs = ['reports','volume','quotes','products','pricing','orders','clients','failed'];
   const pendingQuoteCount = db.orders.reduce((s,o)=>s+o.items.filter(it=>it.tipo==='other' && it.priceOverride==null).length,0);
   const failedEmailCount = db.emailLog.filter(e=>e.status==='failed').length;
   const tabLabels = {
-    reports:t('reports_tab'), quotes:t('tab_quotes')+(pendingQuoteCount?` (${pendingQuoteCount})`:''),
+    reports:t('reports_tab'), volume:t('tab_volume'), quotes:t('tab_quotes')+(pendingQuoteCount?` (${pendingQuoteCount})`:''),
     products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab'),
     failed:t('tab_failed_emails')+(failedEmailCount?` (${failedEmailCount})`:'')
   };
@@ -1217,6 +1330,7 @@ function renderAdminView(){
     <div class="section-title">${t('admin_panel')}</div>
     <div class="staff-tabs">${tabs.map(tb=>`<button data-admintab="${tb}" class="${adminTab===tb?'active':''}">${tabLabels[tb]}</button>`).join('')}</div>
     ${adminTab==='reports' ? `<div class="admin-banner">${t('admin_intro')}</div>${renderReports()}`
+      : adminTab==='volume' ? renderVolumeReport()
       : adminTab==='quotes' ? renderAdminQuotes()
       : adminTab==='products' ? renderAdminProducts()
       : adminTab==='pricing' ? renderAdminPricing()
@@ -1240,7 +1354,7 @@ function renderAdminFailedEmails(){
 
 function productEditFormHtml(p){
   const isNew = !p;
-  const v = p || {en:'',is:'',price:'',unit:'pc',category:'general',active:true};
+  const v = p || {en:'',is:'',price:'',unit:'pc',category:'general',active:true,staffOnly:false};
   return `
   <div class="product-edit-form">
     <div class="form-row2">
@@ -1261,6 +1375,7 @@ function productEditFormHtml(p){
       <select id="pf-category">${Object.entries(CATEGORIES).map(([k,c])=>`<option value="${k}" ${v.category===k?'selected':''}>${c[lang]}</option>`).join('')}</select>
     </div>
     <label class="checkbox-row"><input type="checkbox" id="pf-active" ${v.active!==false?'checked':''}> ${t('product_active')}</label>
+    <label class="checkbox-row"><input type="checkbox" id="pf-staff-only" ${v.staffOnly?'checked':''}> ${t('product_staff_only')}</label>
     <div class="staff-actions">
       <button style="background:var(--teal)" id="pf-save" data-editing="${isNew?'new':p.id}">${t('save')}</button>
       <button style="background:#8a929e" id="pf-cancel">${t('cancel')}</button>
@@ -1277,7 +1392,7 @@ function renderAdminProducts(){
       const usedInOrders = db.orders.some(o=>o.items.some(it=>it.tipo===p.key));
       return `
       <div class="product-row ${p.active?'':'inactive'}">
-        <div class="pname"><div class="en">${p.en}${!p.active?` · <span style="color:var(--danger)">${t('inactive_tag')}</span>`:''}</div><div class="is">${p.is}</div></div>
+        <div class="pname"><div class="en">${p.en}${!p.active?` · <span style="color:var(--danger)">${t('inactive_tag')}</span>`:''}${p.staffOnly?` · <span style="color:var(--muted,#8a929e)">${t('product_staff_only')}</span>`:''}</div><div class="is">${p.is}</div></div>
         <div class="pprice">${p.price===null?t('quote_pending_item'):fmtISK(p.price)}</div>
         <div class="pbtns">
           <button class="icon-btn" data-move-up="${p.id}" title="${t('move_up')}" ${i===0?'disabled':''}>↑</button>
@@ -1533,6 +1648,11 @@ function bindEvents(){
 
   const clientFilterSelect = document.getElementById('staff-client-filter');
   if(clientFilterSelect) clientFilterSelect.onchange = (e)=>{ staffClientFilter=e.target.value; render(); };
+
+  const volStart = document.getElementById('vol-start'); if(volStart) volStart.onchange = (e)=>{ volumeStart=e.target.value; render(); };
+  const volEnd = document.getElementById('vol-end'); if(volEnd) volEnd.onchange = (e)=>{ volumeEnd=e.target.value; render(); };
+  const volClient = document.getElementById('vol-client'); if(volClient) volClient.onchange = (e)=>{ volumeClientFilter=e.target.value; render(); };
+  const volExport = document.getElementById('vol-export'); if(volExport) volExport.onclick = exportVolumeCSV;
   app.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ staffFilter=b.dataset.filter; staffQuickFilter=null; render(); });
   app.querySelectorAll('[data-view-client]').forEach(b=>b.onclick=()=>{ staffClientFilter=b.dataset.viewClient; staffFilter='todos'; staffQuickFilter=null; if(session.role==='staff') staffTab='orders'; else adminTab='orders'; render(); });
 
@@ -1639,6 +1759,7 @@ function bindEvents(){
     const unit = document.getElementById('pf-unit').value;
     const category = document.getElementById('pf-category').value;
     const active = document.getElementById('pf-active').checked;
+    const staffOnly = document.getElementById('pf-staff-only').checked;
     if(!en || !is){ toast(t('err_product_fields')); return; }
     const editing = pfSave.dataset.editing;
     try{
@@ -1646,13 +1767,13 @@ function bindEvents(){
         const key = 'p_'+Date.now();
         const maxOrder = Math.max(0, ...db.products.map(p=>p.sortOrder));
         const { error } = await sb.from('products').insert({
-          id: key, name_en: en, name_is: is, price, unit, category, active, sort_order: maxOrder+1
+          id: key, name_en: en, name_is: is, price, unit, category, active, sort_order: maxOrder+1, staff_only: staffOnly
         });
         if(error) throw error;
         addingProduct=false; toast(t('product_added'));
       } else {
         const { error } = await sb.from('products').update({
-          name_en: en, name_is: is, price, unit, category, active
+          name_en: en, name_is: is, price, unit, category, active, staff_only: staffOnly
         }).eq('id', editing);
         if(error) throw error;
         editingProductId=null; toast(t('product_updated'));
