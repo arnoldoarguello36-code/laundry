@@ -299,6 +299,7 @@ const I18N = {
     add_product:"+ Add product", product_name_en:"Name (English)", product_name_is:"Name (Icelandic)",
     product_price:"Price (ISK)", product_unit:"Unit", product_category:"Category", product_active:"Available to clients",
     product_staff_only:"Staff only (hidden from client order form)",
+    client_unknown:"Client",
     unit_pc:"per piece", unit_kg:"per kg", unit_set:"per set",
     save:"Save", edit:"Edit", delete:"Delete", confirm_delete:"Delete this product? This can't be undone.",
     cannot_delete_used:"This product is used in existing orders. Deactivate it instead of deleting.",
@@ -430,6 +431,7 @@ const I18N = {
     add_product:"+ Bæta við vöru", product_name_en:"Nafn (enska)", product_name_is:"Nafn (íslenska)",
     product_price:"Verð (ISK)", product_unit:"Eining", product_category:"Flokkur", product_active:"Sýnilegt viðskiptavinum",
     product_staff_only:"Aðeins starfsfólk (falið í pöntunarformi viðskiptavina)",
+    client_unknown:"Viðskiptavinur",
     unit_pc:"per stykki", unit_kg:"per kg", unit_set:"per sett",
     save:"Vista", edit:"Breyta", delete:"Eyða", confirm_delete:"Eyða þessari vöru? Ekki hægt að afturkalla.",
     cannot_delete_used:"Þessi vara er notuð í pöntunum. Gerðu hana óvirka í staðinn fyrir að eyða.",
@@ -570,6 +572,17 @@ function mapOrder(o){
     estado:o.estado, urgent:o.urgent, returnMethod:o.return_method, pickup:o.pickup, problem:o.problem, source:o.source,
     notas:o.notas||[], creado: new Date(o.created_at).getTime(), deliveredAt: o.delivered_at ? new Date(o.delivered_at).getTime() : null
   };
+}
+// Client-submitted orders (source==='client') always have client_name===null in
+// the DB (only client_id is set — see the sb.from('orders').insert(...) call in
+// btnSubmitOrden's onclick) — only staff-logged manual/walk-in orders populate
+// client_name directly. Every place that displays a client's name for an order
+// must go through this helper, or a client-placed order renders the literal
+// string "null" (found live in the staff Orders tab on ORD-1000 during QA).
+function orderClientName(o){
+  if(o.clientName) return o.clientName;
+  const u = db.users.find(u=>u.id===o.userId);
+  return u ? u.name : t('client_unknown');
 }
 
 async function loadProducts(){
@@ -993,7 +1006,7 @@ function renderOrderCardStaff(o){
   return `
   <div class="order-card">
     ${badgeRow(o)}
-    <div class="row-top"><div><div class="oid">${o.id} · ${o.clientName}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
+    <div class="row-top"><div><div class="oid">${o.id} · ${orderClientName(o)}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
     ${o.comentarios ? `<div class="comment">💬 ${t('client_says')}: "${o.comentarios}"</div>` : ``}
     ${pipelineHtml(o.estado)}
     ${session.role==='admin' ? priceBlockHtml(o) : ''}
@@ -1161,7 +1174,7 @@ function computeReports(){
   for(let i=13;i>=0;i--){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-i); const count=db.orders.filter(o=>{const od=new Date(o.creado);od.setHours(0,0,0,0);return od.getTime()===d.getTime();}).length; days.push({date:d,count}); }
 
   const revByClientName = {};
-  db.orders.forEach(o=>{ revByClientName[o.clientName] = (revByClientName[o.clientName]||0) + computeOrderTotals(o.items,o).total; });
+  db.orders.forEach(o=>{ revByClientName[orderClientName(o)] = (revByClientName[orderClientName(o)]||0) + computeOrderTotals(o.items,o).total; });
   const revenueByClient = Object.entries(revByClientName).map(([name,value])=>({label:name,value})).sort((a,b)=>b.value-a.value).slice(0,6);
 
   const overdueList = db.orders.filter(isOverdue);
@@ -1311,7 +1324,7 @@ function renderReports(){
 
     <div class="subsection-title">${t('rep_alerts')}</div>
     ${alerts.length===0 ? `<div class="empty-state" style="padding:30px 20px;"><div class="glyph">✅</div><p>${t('rep_no_alerts')}</p></div>` :
-      alerts.map(a=>`<div class="alert-list-item ${a.key==='alert_urgent'?'warn':''}"><b>${a.o.id}</b> · ${a.o.clientName} — ${t(a.key)}</div>`).join('')}
+      alerts.map(a=>`<div class="alert-list-item ${a.key==='alert_urgent'?'warn':''}"><b>${a.o.id}</b> · ${orderClientName(a.o)} — ${t(a.key)}</div>`).join('')}
   `;
 }
 
@@ -1419,7 +1432,7 @@ function renderAdminQuotes(){
       const pendingItems = o.items.filter(it=>it.tipo==='other' && it.priceOverride==null);
       return `
       <div class="order-card">
-        <div class="row-top"><div><div class="oid">${o.id} · ${o.clientName}</div><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
+        <div class="row-top"><div><div class="oid">${o.id} · ${orderClientName(o)}</div><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
         ${pendingItems.map(it=>`
           <div class="checkbox-row" style="align-items:flex-end;">
             <div style="flex:1;">
