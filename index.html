@@ -110,6 +110,7 @@
   .item-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
   .item-row select{flex:2;min-width:120px;}
   .item-row input.qty-input{flex:0 0 62px;}
+  .item-row .qty-unit{flex:0 0 auto;font-size:12px;color:#8a929e;font-weight:600;margin-left:-2px;}
   .item-row input.other-input{flex:2 1 100%;order:3;}
   .item-row button{border:none;background:var(--card);border:1px solid var(--line);border-radius:8px;width:36px;height:44px;color:var(--danger);font-size:16px;cursor:pointer;}
   .item-price-hint{font-size:11px;color:#8a929e;margin:-2px 0 10px 2px;}
@@ -257,6 +258,7 @@ const I18N = {
     items_services:"Garments / services", add_item:"+ Add another garment", req_date:"Requested date",
     comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
     opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
+    pickup_address_label:"Pickup address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Pickup address",
     return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
     service_disabled:"Not offered right now",
     tab_active:"Active", tab_history:"History", no_history_title:"No past orders yet", no_history_sub:"Delivered orders will show up here.",
@@ -302,6 +304,7 @@ const I18N = {
     product_staff_only:"Staff only (hidden from client order form)",
     client_unknown:"Client",
     unit_pc:"per piece", unit_kg:"per kg", unit_set:"per set",
+    unit_abbr_pc:"pcs", unit_abbr_kg:"kg", unit_abbr_set:"set",
     save:"Save", edit:"Edit", delete:"Delete", confirm_delete:"Delete this product? This can't be undone.",
     cannot_delete_used:"This product is used in existing orders. Deactivate it instead of deleting.",
     move_up:"Move up", move_down:"Move down", inactive_tag:"Inactive",
@@ -389,6 +392,7 @@ const I18N = {
     items_services:"Flíkur / þjónusta", add_item:"+ Bæta við flík", req_date:"Óskuð dagsetning",
     comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
     opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
+    pickup_address_label:"Heimilisfang fyrir sókn", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang fyrir sókn",
     return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
     service_disabled:"Ekki í boði núna",
     tab_active:"Virkar", tab_history:"Fyrri pantanir", no_history_title:"Engar fyrri pantanir ennþá", no_history_sub:"Afhentar pantanir birtast hér.",
@@ -434,6 +438,7 @@ const I18N = {
     product_staff_only:"Aðeins starfsfólk (falið í pöntunarformi viðskiptavina)",
     client_unknown:"Viðskiptavinur",
     unit_pc:"per stykki", unit_kg:"per kg", unit_set:"per sett",
+    unit_abbr_pc:"stk", unit_abbr_kg:"kg", unit_abbr_set:"sett",
     save:"Vista", edit:"Breyta", delete:"Eyða", confirm_delete:"Eyða þessari vöru? Ekki hægt að afturkalla.",
     cannot_delete_used:"Þessi vara er notuð í pöntunum. Gerðu hana óvirka í staðinn fyrir að eyða.",
     move_up:"Færa upp", move_down:"Færa niður", inactive_tag:"Óvirk",
@@ -570,7 +575,7 @@ function mapOrder(o){
   return {
     id:o.id, userId:o.client_id, clientName:o.client_name, fecha:o.fecha, comentarios:o.comentarios||'',
     items:(o.order_items||[]).map(it=>({ id:it.id, tipo:it.product_id, cant:Number(it.qty), priceOverride: it.price_override===null||it.price_override===undefined ? null : Number(it.price_override), desc:it.desc||'' })),
-    estado:o.estado, urgent:o.urgent, returnMethod:o.return_method, pickup:o.pickup, problem:o.problem, source:o.source,
+    estado:o.estado, urgent:o.urgent, returnMethod:o.return_method, pickup:o.pickup, pickupAddress:o.pickup_address||'', problem:o.problem, source:o.source,
     notas:o.notas||[], creado: new Date(o.created_at).getTime(), deliveredAt: o.delivered_at ? new Date(o.delivered_at).getTime() : null
   };
 }
@@ -654,7 +659,7 @@ let authScreen = 'login';
 let sheetOpen = false;
 let sheetMode = 'client'; // 'client' | 'manual'
 let orderDraftItems = [];
-let orderDraftMods = {urgent:false, returnMethod:'store', pickup:false};
+let orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
 let orderDraftManualClientId = '';
 let orderDraftManualName = '';
 let editingProductId = null;
@@ -885,6 +890,7 @@ function renderOrderCardCliente(o){
   <div class="order-card">
     ${badgeRow(o)}
     <div class="row-top"><div><div class="oid">${o.id}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
+    ${o.pickup && o.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${o.pickupAddress}</div>` : ``}
     ${pipelineHtml(o.estado)}
     ${priceBlockHtml(o)}
     ${lastNote ? `<div class="comment">📝 ${noteText(lastNote)}</div>` : ``}
@@ -924,6 +930,7 @@ function renderSheet(){
       <div class="item-row">
         <select data-item-tipo="${i}">${activeProducts().map(s=>`<option value="${s.key}" ${s.key===it.tipo?'selected':''}>${s[lang]||s.en}</option>`).join('')}</select>
         <input type="number" min="1" class="qty-input" data-item-cant="${i}" value="${it.cant}">
+        ${it.tipo!=='other' ? `<span class="qty-unit">${t('unit_abbr_'+p.unit)}</span>` : ''}
         ${it.tipo==='other' ? `<input type="text" class="other-input" data-item-desc="${i}" value="${it.desc||''}" placeholder="${t('other_ph')}">` : ''}
         ${orderDraftItems.length>1 ? `<button data-remove-item="${i}">✕</button>`:''}
       </div>${hint}`;
@@ -937,6 +944,7 @@ function renderSheet(){
     <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${!db.settings.deliveryEnabled?'disabled':''}> ${t('opt_return_delivery')} <span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span></label>
 
     ${db.settings.pickupEnabled ? `<label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>` : ''}
+    ${db.settings.pickupEnabled && orderDraftMods.pickup ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${orderDraftMods.pickupAddress||''}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
 
     ${hidePrices ? '' : `
     <div class="order-total-preview">
@@ -1052,6 +1060,7 @@ function renderOrderCardStaff(o){
     ${badgeRow(o)}
     <div class="row-top"><div><div class="oid">${o.id} · ${orderClientName(o)}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
     ${o.comentarios ? `<div class="comment">💬 ${t('client_says')}: "${o.comentarios}"</div>` : ``}
+    ${o.pickup && o.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${o.pickupAddress}</div>` : ``}
     ${pipelineHtml(o.estado)}
     ${session.role==='admin' ? priceBlockHtml(o) : ''}
     <div class="staff-actions">
@@ -1617,7 +1626,7 @@ function bindEvents(){
   if(btnNueva) btnNueva.onclick = ()=>{
     sheetMode = 'client';
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
-    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false};
+    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     sheetOpen = true; render();
     const f = document.getElementById('orden-fecha'); if(f){ f.min = new Date().toISOString().slice(0,10); }
   };
@@ -1625,7 +1634,7 @@ function bindEvents(){
   if(btnLogOrder) btnLogOrder.onclick = ()=>{
     sheetMode = 'manual';
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
-    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false};
+    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     orderDraftManualClientId = ''; orderDraftManualName = '';
     sheetOpen = true; render();
     const f = document.getElementById('orden-fecha'); if(f){ f.min = new Date().toISOString().slice(0,10); }
@@ -1648,6 +1657,7 @@ function bindEvents(){
 
   const ou = document.getElementById('orden-urgent'); if(ou) ou.onchange=()=>{ orderDraftMods.urgent=ou.checked; render(); };
   const op = document.getElementById('orden-pickup'); if(op) op.onchange=()=>{ orderDraftMods.pickup=op.checked; render(); };
+  const opa = document.getElementById('orden-pickup-address'); if(opa) opa.oninput=()=>{ orderDraftMods.pickupAddress=opa.value; };
 
   const btnSubmitOrden = document.getElementById('btn-submit-orden');
   if(btnSubmitOrden) btnSubmitOrden.onclick = async ()=>{
@@ -1655,6 +1665,7 @@ function bindEvents(){
     const comentarios = document.getElementById('orden-comentarios').value.trim();
     if(!fecha){ toast(t('err_pick_date')); return; }
     if(orderDraftItems.some(it=>it.tipo==='other' && !it.desc.trim())){ toast(t('err_other_desc')); return; }
+    if(db.settings.pickupEnabled && orderDraftMods.pickup && !orderDraftMods.pickupAddress.trim()){ toast(t('err_pickup_address')); return; }
 
     const itemsPayload = orderDraftItems.map(it=>({
       product_id: it.tipo, qty: it.cant, price_override: null, desc: it.desc || null
@@ -1675,6 +1686,7 @@ function bindEvents(){
           p_client_id: clientId, p_client_name: clientName, p_fecha: fecha,
           p_comentarios: comentarios || null, p_urgent: orderDraftMods.urgent,
           p_return_method: orderDraftMods.returnMethod, p_pickup: orderDraftMods.pickup,
+          p_pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null,
           p_items: itemsPayload
         });
         if(error) throw error;
@@ -1683,7 +1695,9 @@ function bindEvents(){
         const { data: orderRow, error: orderErr } = await sb.from('orders').insert({
           client_id: session.userId, client_name: null, fecha, comentarios: comentarios || null,
           estado: 'en-cola', urgent: orderDraftMods.urgent, return_method: orderDraftMods.returnMethod,
-          pickup: orderDraftMods.pickup, source: 'client'
+          pickup: orderDraftMods.pickup,
+          pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null,
+          source: 'client'
         }).select().single();
         if(orderErr) throw orderErr;
         const { error: itemsErr } = await sb.from('order_items').insert(
