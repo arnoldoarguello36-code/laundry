@@ -120,6 +120,7 @@
   .checkbox-row{display:flex;align-items:center;gap:9px;margin-bottom:10px;font-size:13.5px;font-weight:600;color:#444e57;}
   .checkbox-row input{width:auto;accent-color:var(--teal);}
   .checkbox-row .fee{margin-left:auto;font-size:11.5px;color:#8a929e;font-weight:600;}
+  .pickup-section{border-top:1px dashed var(--line);margin-top:14px;padding-top:14px;}
 
   .order-total-preview{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
   .order-total-preview .row{display:flex;justify-content:space-between;font-size:13px;color:#4A5568;padding:3px 0;}
@@ -259,6 +260,7 @@ const I18N = {
     comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
     opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
     pickup_address_label:"Pickup address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Pickup address",
+    pickup_section:"Home pickup (optional)",
     return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
     service_disabled:"Not offered right now",
     tab_active:"Active", tab_history:"History", no_history_title:"No past orders yet", no_history_sub:"Delivered orders will show up here.",
@@ -393,6 +395,7 @@ const I18N = {
     comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
     opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
     pickup_address_label:"Heimilisfang fyrir sókn", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang fyrir sókn",
+    pickup_section:"Sækja heim (valfrjálst)",
     return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
     service_disabled:"Ekki í boði núna",
     tab_active:"Virkar", tab_history:"Fyrri pantanir", no_history_title:"Engar fyrri pantanir ennþá", no_history_sub:"Afhentar pantanir birtast hér.",
@@ -943,8 +946,12 @@ function renderSheet(){
     <label class="checkbox-row"><input type="radio" name="return-method" value="store" ${orderDraftMods.returnMethod==='store'?'checked':''}> ${t('opt_return_store')} <span class="fee">${lang==='is'?'ókeypis':'free'}</span></label>
     <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${!db.settings.deliveryEnabled?'disabled':''}> ${t('opt_return_delivery')} <span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span></label>
 
-    ${db.settings.pickupEnabled ? `<label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>` : ''}
-    ${db.settings.pickupEnabled && orderDraftMods.pickup ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${orderDraftMods.pickupAddress||''}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
+    ${db.settings.pickupEnabled ? `
+    <div class="pickup-section">
+      <label>${t('pickup_section')}</label>
+      <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
+      ${orderDraftMods.pickup ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${orderDraftMods.pickupAddress||''}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
+    </div>` : ''}
 
     ${hidePrices ? '' : `
     <div class="order-total-preview">
