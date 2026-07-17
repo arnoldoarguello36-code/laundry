@@ -1,4 +1,4 @@
-# Norðurljós Laundry
+# Þvottafélagið
 
 Production order-management app for a real, operating laundry shop — client ordering/tracking, staff order pipeline, admin products/pricing/reports. Bilingual (EN/IS).
 

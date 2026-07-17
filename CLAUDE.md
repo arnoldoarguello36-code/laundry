@@ -1,4 +1,4 @@
-# Norðurljós Laundry
+# Þvottafélagið
 
 Production laundry order-management app. Static HTML/JS front end (`index.html`), Supabase (Postgres + Auth + RLS + Edge Functions) backend, Resend for bilingual transactional email.
 

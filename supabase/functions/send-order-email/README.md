@@ -13,7 +13,7 @@ Set once per environment before this function will actually send mail:
 
 ```
 supabase secrets set RESEND_API_KEY=re_xxx
-supabase secrets set RESEND_FROM_ADDRESS="Norðurljós Laundry <orders@norduljos.is>"
+supabase secrets set RESEND_FROM_ADDRESS="Þvottafélagið <orders@norduljos.is>"
 ```
 
 `RESEND_FROM_ADDRESS` must be on a domain verified in Resend, or sends will

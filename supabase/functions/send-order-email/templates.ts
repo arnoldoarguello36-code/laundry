@@ -30,30 +30,30 @@ const STRINGS: Record<Lang, Record<string, string>> = {
   en: {
     quote_pending_item: "quote pending",
     pending_items_note: "+ items pending quote",
-    brand_sign_off: "— Norðurljós Laundry",
+    brand_sign_off: "— Þvottafélagið",
     order_created_subject: "Your order {id} has been received",
     order_created_body:
-      "Hi {name},\n\nWe've received your order {id}.\n\nItems:\n{items}\n\nEstimated total: {total}\nRequested delivery: {date}\n\nWe'll notify you by email as your order progresses.\n\n— Norðurljós Laundry",
+      "Hi {name},\n\nWe've received your order {id}.\n\nItems:\n{items}\n\nEstimated total: {total}\nRequested delivery: {date}\n\nWe'll notify you by email as your order progresses.\n\n— Þvottafélagið",
     status_changed_subject: "Update on your order {id}: {status}",
     status_changed_body:
-      "Hi {name},\n\nYour order {id} is now: {status}.\n\n— Norðurljós Laundry",
+      "Hi {name},\n\nYour order {id} is now: {status}.\n\n— Þvottafélagið",
     price_assigned_subject: "Price confirmed for your order {id}",
     price_assigned_body:
-      "Hi {name},\n\nWe've finished pricing your order {id}.\n\nItems:\n{items}\n\nTotal: {total}\n\nYou can view the full order details anytime by logging in.\n\n— Norðurljós Laundry",
+      "Hi {name},\n\nWe've finished pricing your order {id}.\n\nItems:\n{items}\n\nTotal: {total}\n\nYou can view the full order details anytime by logging in.\n\n— Þvottafélagið",
   },
   is: {
     quote_pending_item: "verð óstaðfest",
     pending_items_note: "+ atriði bíða verðs",
-    brand_sign_off: "— Norðurljós þvottahús",
+    brand_sign_off: "— Þvottafélagið",
     order_created_subject: "Pöntun þín {id} hefur verið móttekin",
     order_created_body:
-      "Hæ {name},\n\nVið höfum móttekið pöntun þína {id}.\n\nAtriði:\n{items}\n\nÁætlað heildarverð: {total}\nÓskuð afhending: {date}\n\nVið látum þig vita í tölvupósti eftir því sem pöntunin þróast.\n\n— Norðurljós þvottahús",
+      "Hæ {name},\n\nVið höfum móttekið pöntun þína {id}.\n\nAtriði:\n{items}\n\nÁætlað heildarverð: {total}\nÓskuð afhending: {date}\n\nVið látum þig vita í tölvupósti eftir því sem pöntunin þróast.\n\n— Þvottafélagið",
     status_changed_subject: "Uppfærsla á pöntun {id}: {status}",
     status_changed_body:
-      "Hæ {name},\n\nPöntun þín {id} er núna: {status}.\n\n— Norðurljós þvottahús",
+      "Hæ {name},\n\nPöntun þín {id} er núna: {status}.\n\n— Þvottafélagið",
     price_assigned_subject: "Verð staðfest fyrir pöntun {id}",
     price_assigned_body:
-      "Hæ {name},\n\nVið höfum lokið við að verðleggja pöntun þína {id}.\n\nAtriði:\n{items}\n\nSamtals: {total}\n\nÞú getur skoðað pöntunina hvenær sem er með því að skrá þig inn.\n\n— Norðurljós þvottahús",
+      "Hæ {name},\n\nVið höfum lokið við að verðleggja pöntun þína {id}.\n\nAtriði:\n{items}\n\nSamtals: {total}\n\nÞú getur skoðað pöntunina hvenær sem er með því að skrá þig inn.\n\n— Þvottafélagið",
   },
 };
 

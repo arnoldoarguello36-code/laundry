@@ -11,7 +11,9 @@
 // Required secrets (not auto-injected — set once per environment via
 // `supabase secrets set NAME=value` or Dashboard → Edge Functions → Secrets):
 //   RESEND_API_KEY       Resend API key
-//   RESEND_FROM_ADDRESS  verified sender, e.g. "Norðurljós Laundry <orders@norduljos.is>"
+//   RESEND_FROM_ADDRESS  verified sender, e.g. "Þvottafélagið <orders@norduljos.is>"
+//   (domain part unchanged pending the domain-migration decision discussed
+//   separately — this is just the display name shown to recipients)
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically to
 // every Supabase Edge Function; not set manually.
 

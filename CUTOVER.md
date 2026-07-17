@@ -2,7 +2,7 @@
 
 T9: a staging environment plus a written cutover plan and rollback note, so
 going live is a checklist execution instead of an improvisation. This is a
-live revenue business (Norðurljós Laundry) — an untested cutover risks lost
+live revenue business (Þvottafélagið) — an untested cutover risks lost
 orders and lost trust on day one.
 
 ## 0. Staging environment (one-time setup, do this first)
