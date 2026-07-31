@@ -644,7 +644,12 @@ function isDesktop(){ return desktopMql.matches; }
 let desktopMqlDebounce = null;
 desktopMql.addEventListener('change', ()=>{
   clearTimeout(desktopMqlDebounce);
-  desktopMqlDebounce = setTimeout(render, 150);
+  desktopMqlDebounce = setTimeout(()=>{
+    // Same guard startPolling() uses — never blow away an open form mid-edit
+    // just because the viewport crossed the desktop breakpoint.
+    if(sheetOpen || addingClient || editingClientId || addingProduct || editingProductId) return;
+    render();
+  }, 150);
 });
 
 function priceEntry(key){ return db.products.find(p=>p.key===key) || db.products.find(p=>p.key==='other'); }
@@ -1619,11 +1624,18 @@ function computeBillingSummary(startISO, endISO, clientId){
     });
   });
   const catRows = Object.keys(CATEGORIES).map(cat=>({cat, label:CATEGORIES[cat][lang], value: categoryTotals[cat]||0}));
+  const itemsTotal = catRows.reduce((s,r)=>s+r.value,0);
   const transportes = orders.reduce((s,o)=>s
     + (o.returnMethod==='delivery' ? db.settings.deliveryFee : 0)
     + (o.pickup ? db.settings.pickupFee : 0), 0);
-  const grandTotal = catRows.reduce((s,r)=>s+r.value,0) + transportes;
-  return { catRows, transportes, grandTotal, pendingCount, orderCount: orders.length };
+  const expressFee = orders.reduce((s,o)=>{
+    if(!o.urgent) return s;
+    const orderItemsTotal = o.items.reduce((si,it)=>{ const c = computeItemCost(it); return c===null ? si : si+c; }, 0);
+    return s + Math.round(orderItemsTotal * (db.settings.expressPercent/100));
+  }, 0);
+  const discount = db.settings.discountPercent ? Math.round(itemsTotal * (db.settings.discountPercent/100)) : 0;
+  const grandTotal = Math.max(0, itemsTotal + transportes + expressFee - discount);
+  return { catRows, transportes, expressFee, discount, grandTotal, pendingCount, orderCount: orders.length };
 }
 
 function renderBillingSummary(){
@@ -1634,6 +1646,8 @@ function renderBillingSummary(){
       <div class="price-block">
         ${b.catRows.map(r=>`<div class="price-line"><span>${r.label}</span><span class="amount">${fmtISK(r.value)}</span></div>`).join('')}
         <div class="price-line"><span>${t('billing_transportes')}</span><span class="amount">${fmtISK(b.transportes)}</span></div>
+        ${b.expressFee>0 ? `<div class="price-line"><span>${t('express_fee')}</span><span class="amount">${fmtISK(b.expressFee)}</span></div>` : ''}
+        ${b.discount>0 ? `<div class="price-line"><span>${t('discount')}</span><span class="amount">-${fmtISK(b.discount)}</span></div>` : ''}
         <div class="price-total"><span>${t('billing_total')}</span><span class="amount">${fmtISK(b.grandTotal)}</span></div>
       </div>
       ${b.pendingCount>0 ? `<p class="chart-sub"><span class="badge-mini problem">${t('quote_pending_item')}</span> ${b.pendingCount} ${t('billing_pending_note')}</p>` : ''}
