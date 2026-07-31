@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Þvottafélagið — Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#1C2531; --ink-soft:#4A5568; --steam:#F1EEE7; --card:#FFFFFF; --line:#E4E0D6;
@@ -17,9 +17,98 @@
     --shadow-lg: 0 12px 32px rgba(28,37,49,.14), 0 2px 6px rgba(28,37,49,.08);
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--steam);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  body{margin:0;background:var(--steam);color:var(--ink);font-family:'Karla',sans-serif;-webkit-font-smoothing:antialiased;}
   h1,h2,h3,.display{font-family:'Fraunces',serif;font-weight:600;letter-spacing:-0.015em;}
   #app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--steam);display:flex;flex-direction:column;position:relative;box-shadow:var(--shadow-lg);}
+
+  /* DESKTOP_BREAKPOINT: 900px — mirrors the JS constant of the same name
+     (search "DESKTOP_BREAKPOINT" in <script>). Media queries can't read a JS
+     const or a CSS custom property, so this number is kept in sync by hand;
+     change both together. Below 900px the layout is unchanged mobile-first
+     (#app stays a fixed 480px column). At/above 900px, `body.is-desktop`
+     (toggled every render() by isDesktop()) is available as a CSS hook for
+     desktop-specific layouts — see T3 (staff sidebar console) and T4 (client
+     split-login + list/detail) for the views that actually use it. Views not
+     yet redesigned for desktop keep rendering their mobile markup untouched. */
+  @media (min-width:900px){
+    body.is-desktop #app{max-width:none;box-shadow:none;}
+
+    /* --- T3: desktop staff console shell (sidebar nav + Today KPI grid) --- */
+    .ds-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
+    .ds-sidebar{background:var(--ink);color:#fff;padding:24px 16px;display:flex;flex-direction:column;gap:28px;}
+    .ds-brand{font-family:'Fraunces',serif;font-size:19px;font-weight:600;color:#fff;letter-spacing:.01em;}
+    .ds-brand-sub{display:block;font-family:'Karla',sans-serif;font-size:11px;color:#9AA5B5;font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
+    .ds-nav{display:flex;flex-direction:column;gap:2px;}
+    .ds-nav button{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:none;background:none;color:#C7CEDA;text-decoration:none;font-size:14px;font-weight:600;font-family:inherit;text-align:left;cursor:pointer;}
+    .ds-nav button.active{background:var(--teal);color:#fff;}
+    .ds-nav button:hover:not(.active){background:rgba(255,255,255,.06);color:#fff;}
+    .ds-sidebar-foot{margin-top:auto;font-size:12px;color:#8B94A3;border-top:1px solid rgba(255,255,255,.1);padding-top:14px;}
+    .ds-sidebar-foot button{margin-top:6px;background:none;border:none;color:#C7CEDA;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:0;}
+    .ds-sidebar-foot button:hover{color:#fff;}
+    .ds-main{padding:32px 40px;max-width:1240px;}
+    .ds-topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;gap:16px;}
+    .ds-topbar h1{font-size:24px;margin:0;font-weight:600;}
+    .ds-meta{color:var(--ink-soft);font-size:13px;margin-top:4px;}
+    .ds-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:32px;}
+    .ds-kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow-sm);text-align:left;cursor:pointer;font-family:inherit;}
+    .ds-kpi .n{font-family:'Fraunces',serif;font-size:32px;font-weight:600;color:var(--ink);}
+    .ds-kpi .l{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-top:4px;}
+    .ds-kpi.alert{border-color:var(--clay);}
+    .ds-kpi.alert .n{color:var(--clay);}
+    .ds-kpi.warn{border-color:#C9A227;}
+    .ds-kpi.warn .n{color:#9C7F1E;}
+    .ds-cols{display:grid;grid-template-columns:1.4fr 1fr;gap:24px;}
+    .ds-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow-sm);}
+    .ds-panel h2{font-size:15px;margin:0 0 4px;font-weight:600;}
+    .ds-panel .sub{font-size:12.5px;color:var(--ink-soft);margin:0 0 16px;}
+    .ds-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+    .ds-table th{text-align:left;color:var(--ink-soft);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;padding:8px 10px;border-bottom:1px solid var(--line);}
+    .ds-table td{padding:10px 10px;border-bottom:1px solid var(--line);}
+    .ds-table tbody tr:last-child td{border-bottom:none;}
+    .ds-note{margin-top:14px;padding:10px 12px;background:var(--steam);border-radius:10px;font-size:12px;color:var(--ink-soft);}
+    /* .price-line inside .ds-panel reuses the existing mobile price-line rules
+       (color/spacing already match the mockup 1:1 — no override needed), it
+       just needs the flex name/qty split the mockup uses instead of the
+       mobile amount/qty-name pairing. */
+    .ds-panel .price-line{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+    .ds-panel .price-line:last-of-type{border-bottom:none;}
+    .ds-panel .price-line .name{font-weight:600;}
+    .ds-panel .price-line .qty{color:var(--ink-soft);}
+    .ds-topbar-actions{display:flex;align-items:center;gap:14px;}
+    .ds-new-order-btn{width:auto;padding:11px 20px;font-size:14px;}
+
+    /* --- T4: desktop split-screen login/register/forgot --- */
+    .ds-auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px;}
+    .ds-split{max-width:1040px;width:100%;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);min-height:560px;}
+    .ds-split-brand{background:var(--ink);color:#fff;padding:56px 48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;}
+    .ds-split-brand::after{content:"";position:absolute;right:-60px;bottom:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(47,143,134,.35),transparent 70%);}
+    .ds-split-brand h1{font-size:32px;margin:14px 0 12px;color:#fff;}
+    .ds-split-brand p{color:#C7CEDA;font-size:15px;line-height:1.6;max-width:340px;position:relative;z-index:1;}
+    .ds-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--teal);font-weight:700;position:relative;z-index:1;}
+    .ds-trust{margin-top:auto;display:flex;flex-direction:column;gap:14px;position:relative;z-index:1;}
+    .ds-trust-row{display:flex;gap:10px;align-items:center;font-size:13.5px;color:#DCE2EA;}
+    .ds-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;}
+    .ds-split-form{background:var(--card);padding:56px 48px;display:flex;flex-direction:column;justify-content:center;overflow-y:auto;}
+    .ds-form-kicker{font-size:12px;color:var(--teal-dark);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+    .ds-split-form h2{font-size:24px;margin:0 0 8px;}
+    .ds-form-sub{color:var(--ink-soft);font-size:14px;margin:0 0 22px;}
+
+    /* --- T4/E4: desktop client My Orders (list + detail) --- */
+    .ds-client-cols{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;}
+    .ds-list-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);}
+    .ds-list-head{padding:18px 18px 12px;border-bottom:1px solid var(--line);}
+    .ds-list-head h2{margin:0 0 10px;font-size:17px;}
+    .ds-list-head .staff-tabs{margin:0;}
+    .ds-order-row{padding:14px 18px;border-bottom:1px solid var(--line);cursor:pointer;}
+    .ds-order-row:last-child{border-bottom:none;}
+    .ds-order-row.active{background:var(--steam);border-left:3px solid var(--teal);}
+    .ds-order-row .oid{font-size:12px;color:var(--ink-soft);font-weight:700;}
+    .ds-order-row .items{font-size:14px;font-weight:600;margin:2px 0;}
+    .ds-list-empty{padding:28px 18px;color:var(--ink-soft);font-size:13.5px;text-align:center;}
+    .ds-detail-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px;box-shadow:var(--shadow-sm);}
+    .ds-detail-panel h2{margin:0 0 4px;font-size:22px;}
+    .ds-detail-panel .sub{color:var(--ink-soft);font-size:14px;margin-bottom:8px;}
+  }
 
   .topbar{padding:16px 18px 12px;display:flex;flex-direction:column;background:var(--card);position:sticky;top:0;z-index:20;gap:10px;box-shadow:var(--shadow-sm);}
   .topbar-brandrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
@@ -257,6 +346,7 @@ const I18N = {
     new_order:"+ New order", my_orders:"My orders", logout:"Log out",
     requested_delivery:"Requested delivery", new_order_title:"New order", new_order_sub:"Tell us what you need washed and by when.",
     items_services:"Garments / services", add_item:"+ Add another garment", req_date:"Requested date",
+    req_date_manual:"Ready by",
     comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
     opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
     pickup_address_label:"Pickup address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Pickup address",
@@ -271,12 +361,15 @@ const I18N = {
     order_sent:"Order submitted — confirmation emailed ✓", order_updated:"Order updated — client emailed", note_added:"Note added",
     note_sent:"Note sent to client by email", issue_resolved:"Issue marked as resolved",
     staff_panel:"Staff panel", admin_panel:"Admin panel",
-    tab_today:"Today", orders_tab:"Orders", clients_tab:"Clients", reports_tab:"Reports", emails_tab:"Emails",
+    tab_today:"Today", orders_tab:"Orders", clients_tab:"Clients", reports_tab:"Dashboards", emails_tab:"Emails",
     tab_products:"Products", tab_pricing:"Pricing", tab_volume:"Volume",
     rep_volume:"Volume processed", rep_volume_sub:"Kilos/units processed per day — billing basis for contract clients.",
     rep_volume_start:"Start date", rep_volume_end:"End date", rep_volume_client:"Client",
     rep_volume_all_clients:"All clients", rep_volume_day:"Day", rep_volume_total:"Total",
     rep_volume_export:"Export to Excel (CSV)",
+    billing_summary:"Billing summary", billing_summary_sub:"ISK breakdown by category for the selected date range.",
+    billing_transportes:"Transportes (delivery + pickup)", billing_total:"Total",
+    billing_pending_note:"item(s) awaiting a price — excluded from the total above",
     all:"All", client_label:"Client:", all_clients:"All clients",
     no_orders_filter:"No orders here", no_orders_filter_sub:"There are no orders matching this filter yet.",
     client_says:"Client", advance_to:"Advance to", flag_issue:"Flag issue", resolve_issue:"Resolve issue",
@@ -299,6 +392,11 @@ const I18N = {
     today_due:"Due today", today_received:"Received today", today_overdue:"Overdue", today_urgent:"Urgent",
     today_problems:"Problems", today_progress:"In progress", today_ready:"Ready",
     clear_filter:"Clear filter", filtered_by:"Filtered:",
+    today_due_sub:"Orders that need to move before end of day.", col_order:"Order", col_client:"Client", col_items:"Items", col_status:"Status",
+    signed_in_as:"Signed in as", no_due_today:"Nothing due today.",
+    orders_received_today_meta:"orders received today", contract_activity_note:"Full billing breakdown is available to admins under Volume.",
+    welcome_eyebrow:"Welcome", brand_trust_copy:"Track your garments and place new orders in seconds — Iceland's laundry service for people who'd rather spend the time on something else.",
+    trust_1:"Same-day and next-day turnaround", trust_2:"Free pickup for contract clients", trust_3:"Live order status, no phone calls needed",
 
     admin_intro:"Manage your catalog, pricing and view business reports — no code required.",
     add_product:"+ Add product", product_name_en:"Name (English)", product_name_is:"Name (Icelandic)",
@@ -392,6 +490,7 @@ const I18N = {
     new_order:"+ Ný pöntun", my_orders:"Pantanirnar mínar", logout:"Útskrá",
     requested_delivery:"Óskuð afhending", new_order_title:"Ný pöntun", new_order_sub:"Segðu okkur hvað þarf að þvo og hvenær.",
     items_services:"Flíkur / þjónusta", add_item:"+ Bæta við flík", req_date:"Óskuð dagsetning",
+    req_date_manual:"Skiladagur",
     comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
     opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
     pickup_address_label:"Heimilisfang fyrir sókn", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang fyrir sókn",
@@ -406,12 +505,15 @@ const I18N = {
     order_sent:"Pöntun send — staðfesting send í tölvupósti ✓", order_updated:"Pöntun uppfærð — tölvupóstur sendur", note_added:"Athugasemd bætt við",
     note_sent:"Athugasemd send í tölvupósti", issue_resolved:"Vandamál merkt leyst",
     staff_panel:"Stjórnborð starfsfólks", admin_panel:"Stjórnendaborð",
-    tab_today:"Í dag", orders_tab:"Pantanir", clients_tab:"Viðskiptavinir", reports_tab:"Skýrslur", emails_tab:"Tölvupóstar",
+    tab_today:"Í dag", orders_tab:"Pantanir", clients_tab:"Viðskiptavinir", reports_tab:"Mælaborð", emails_tab:"Tölvupóstar",
     tab_products:"Vörur", tab_pricing:"Verðskrá", tab_volume:"Magn",
     rep_volume:"Unnið magn", rep_volume_sub:"Kíló/stykki unnin á dag — grunnur fyrir reikningagerð samningsviðskiptavina.",
     rep_volume_start:"Upphafsdagur", rep_volume_end:"Lokadagur", rep_volume_client:"Viðskiptavinur",
     rep_volume_all_clients:"Allir viðskiptavinir", rep_volume_day:"Dagur", rep_volume_total:"Samtals",
     rep_volume_export:"Flytja út í Excel (CSV)",
+    billing_summary:"Reikningayfirlit", billing_summary_sub:"Sundurliðun í krónum eftir flokki fyrir valið tímabil.",
+    billing_transportes:"Flutningar (heimsending + sókn)", billing_total:"Samtals",
+    billing_pending_note:"liður bíður verðs — ekki talinn með í samtölu hér að ofan",
     all:"Allt", client_label:"Viðskiptavinur:", all_clients:"Allir viðskiptavinir",
     no_orders_filter:"Engar pantanir hér", no_orders_filter_sub:"Engar pantanir passa við þessa síu ennþá.",
     client_says:"Viðskiptavinur", advance_to:"Færa í", flag_issue:"Merkja vandamál", resolve_issue:"Merkja leyst",
@@ -434,6 +536,11 @@ const I18N = {
     today_due:"Á að afhenda í dag", today_received:"Móttekið í dag", today_overdue:"Á eftir áætlun", today_urgent:"Áríðandi",
     today_problems:"Vandamál", today_progress:"Í vinnslu", today_ready:"Tilbúið",
     clear_filter:"Hreinsa síu", filtered_by:"Síað eftir:",
+    today_due_sub:"Pantanir sem þarf að afgreiða fyrir lok dags.", col_order:"Pöntun", col_client:"Viðskiptavinur", col_items:"Vörur", col_status:"Staða",
+    signed_in_as:"Innskráð(ur) sem", no_due_today:"Ekkert á gjalddaga í dag.",
+    orders_received_today_meta:"pantanir mótteknar í dag", contract_activity_note:"Nánari sundurliðun fyrir reikningagerð er aðgengileg stjórnendum undir Magn.",
+    welcome_eyebrow:"Velkomin", brand_trust_copy:"Fylgstu með fötunum þínum og pantaðu á sekúndum — þvottaþjónusta Íslands fyrir fólk sem vill frekar eyða tímanum í eitthvað annað.",
+    trust_1:"Sama dags og næsta dags afgreiðsla", trust_2:"Frí sókn fyrir samningsviðskiptavini", trust_3:"Rauntíma staða pöntunar, engin símtöl þarf",
 
     admin_intro:"Sýslaðu með vörulista, verð og skoðaðu rekstrarskýrslur — engin kóðun nauðsynleg.",
     add_product:"+ Bæta við vöru", product_name_en:"Nafn (enska)", product_name_is:"Nafn (íslenska)",
@@ -522,6 +629,28 @@ function statusLabel(e){ return t('status')[e]; }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function isToday(ts){ return new Date(ts).toDateString() === new Date().toDateString(); }
 function isOverdue(o){ return o.fecha < todayISO() && o.estado !== 'entregado'; }
+
+// Desktop breakpoint: 900px, kept in sync with the CSS `@media (min-width:900px)`
+// block below (search "DESKTOP_BREAKPOINT" in <style> for the matching comment).
+// Single source of truth for the number lives here in JS; CSS mirrors it by hand
+// since media queries can't read a JS constant or a CSS custom property.
+const DESKTOP_BREAKPOINT = 900;
+const desktopMql = window.matchMedia(`(min-width:${DESKTOP_BREAKPOINT}px)`);
+function isDesktop(){ return desktopMql.matches; }
+
+// render() does a full innerHTML re-render (no diffing), so a raw resize
+// listener firing on every drag tick would be visibly janky. Debounce the
+// breakpoint-crossing re-render instead of reacting to every match-state flip.
+let desktopMqlDebounce = null;
+desktopMql.addEventListener('change', ()=>{
+  clearTimeout(desktopMqlDebounce);
+  desktopMqlDebounce = setTimeout(()=>{
+    // Same guard startPolling() uses — never blow away an open form mid-edit
+    // just because the viewport crossed the desktop breakpoint.
+    if(sheetOpen || addingClient || editingClientId || addingProduct || editingProductId) return;
+    render();
+  }, 150);
+});
 
 function priceEntry(key){ return db.products.find(p=>p.key===key) || db.products.find(p=>p.key==='other'); }
 // Staff-only products (e.g. "Gull"/kilos amarillos) are hidden from the
@@ -665,11 +794,21 @@ let orderDraftItems = [];
 let orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
 let orderDraftManualClientId = '';
 let orderDraftManualName = '';
+// Client mode: blank, required, min=today (can't request a past delivery).
+// Manual/staff mode: defaults to today (most walk-ins are same-day), staff
+// can push it later or backdate it (e.g. logging a walk-in retroactively) —
+// no min restriction, since staff is setting the order's due date, not a
+// client making a request.
+let orderDraftFecha = '';
 let editingProductId = null;
 let addingProduct = false;
 let addingClient = false;
 let editingClientId = null;
 let clientSubTab = 'active'; // 'active' | 'history'
+// Desktop-only (T4): which order is shown in the My Orders detail pane. Reset
+// to the most recent order in the currently-shown list whenever that list is
+// empty of the previous selection (see renderDesktopClienteView).
+let selectedOrderId = null;
 let quotePriceDrafts = {};
 // T-contract-volume: admin "Volume" report date range, defaults to the
 // trailing 7 days (inclusive) so the tab is useful on first open.
@@ -699,10 +838,15 @@ function noteText(n){
 /* ============ RENDER ROOT ============ */
 function render(){
   const app = document.getElementById('app');
+  document.body.classList.toggle('is-desktop', isDesktop());
+  // Password-recovery deep link stays mobile-styled at every viewport — it's
+  // a one-off screen reached from an email link, not part of the T4 mockup
+  // (which only covers login/register/forgot + My Orders), so a desktop
+  // split-screen treatment wasn't designed for it.
   if(authScreen === 'recovery'){ app.innerHTML = renderTopbar() + renderRecoveryScreen(); bindEvents(); return; }
-  if(!session.role){ app.innerHTML = renderTopbar() + renderAuth(); }
-  else if(session.role === 'client'){ app.innerHTML = renderTopbar() + renderClienteView() + renderSheet(); }
-  else if(session.role === 'staff'){ app.innerHTML = renderTopbar() + renderStaffView() + renderSheet(); }
+  if(!session.role){ app.innerHTML = isDesktop() ? renderDesktopAuth() : renderTopbar() + renderAuth(); }
+  else if(session.role === 'client'){ app.innerHTML = isDesktop() ? renderDesktopClienteView() + renderSheet() : renderTopbar() + renderClienteView() + renderSheet(); }
+  else if(session.role === 'staff'){ app.innerHTML = isDesktop() ? renderDesktopStaffShell() + renderSheet() : renderTopbar() + renderStaffView() + renderSheet(); }
   else { app.innerHTML = renderTopbar() + renderAdminView() + renderSheet(); }
   bindEvents();
 }
@@ -778,32 +922,20 @@ function renderTopbar(){
 }
 
 /* ============ AUTH ============ */
-function renderAuth(){
-  if(authScreen === 'login'){
-    return `
-    <div class="auth-screen">
-      <div class="auth-hero"><div class="eyebrow">${t('welcome_back')}</div><h1>${t('login_title')}</h1><p>${t('login_sub')}</p></div>
-      <div class="field"><label>${t('email')}</label><input type="email" id="login-email" placeholder="anna.bjork@example.is"></div>
-      <div class="field"><label>${t('pass')}</label><input type="password" id="login-pass" placeholder="••••"></div>
-      <button class="btn btn-primary" id="btn-login">${t('btn_login')}</button>
-      <button class="btn btn-teal" id="btn-staff-login">${t('btn_staff_login')}</button>
-      <button class="btn btn-clay" id="btn-admin-login">${t('btn_admin_login')}</button>
-      <div class="switch-link">${t('no_account')} <a id="go-registro">${t('signup')}</a></div>
-      <div class="switch-link" style="margin-top:-4px;"><a id="go-forgot">${t('forgot_password')}</a></div>
-    </div>`;
-  }
-  if(authScreen === 'forgot'){
-    return `
-    <div class="auth-screen">
-      <div class="auth-hero"><h1>${t('forgot_password_title')}</h1><p>${t('forgot_password_sub')}</p></div>
-      <div class="field"><label>${t('email')}</label><input type="email" id="forgot-email" placeholder="anna.bjork@example.is"></div>
-      <button class="btn btn-primary" id="btn-send-reset">${t('send_reset_link')}</button>
-      <div class="switch-link">${t('back_to_login')} <a id="go-login-from-forgot">${t('login_link')}</a></div>
-    </div>`;
-  }
-  return `
-  <div class="auth-screen">
-    <div class="auth-hero"><div class="eyebrow">${t('first_time')}</div><h1>${t('register_title')}</h1><p>${t('register_sub')}</p></div>
+// Shared between mobile renderAuth() and desktop renderDesktopAuth() (T4) so
+// hero copy and form fields can't drift between the two layouts — only the
+// surrounding chrome (single column vs. split brand/form panes) differs.
+function authScreenMeta(){
+  if(authScreen==='forgot') return {eyebrow:'', title:t('forgot_password_title'), sub:t('forgot_password_sub')};
+  if(authScreen==='registro') return {eyebrow:t('first_time'), title:t('register_title'), sub:t('register_sub')};
+  return {eyebrow:t('welcome_back'), title:t('login_title'), sub:t('login_sub')};
+}
+function authFieldsHtml(){
+  if(authScreen==='forgot') return `
+    <div class="field"><label>${t('email')}</label><input type="email" id="forgot-email" placeholder="anna.bjork@example.is"></div>
+    <button class="btn btn-primary" id="btn-send-reset">${t('send_reset_link')}</button>
+    <div class="switch-link">${t('back_to_login')} <a id="go-login-from-forgot">${t('login_link')}</a></div>`;
+  if(authScreen==='registro') return `
     <div class="field"><label>${t('full_name')}</label><input id="reg-name" placeholder="Jón Jónsson"></div>
     <div class="field"><label>${t('email')}</label><input id="reg-email" type="email" placeholder="jon@example.is"></div>
     <div class="field"><label>${t('phone')}</label><input id="reg-phone" type="tel" placeholder="555-0199"></div>
@@ -816,7 +948,52 @@ function renderAuth(){
       </select>
     </div>
     <button class="btn btn-primary" id="btn-registro">${t('btn_create_account')}</button>
-    <div class="switch-link">${t('have_account')} <a id="go-login">${t('login_link')}</a></div>
+    <div class="switch-link">${t('have_account')} <a id="go-login">${t('login_link')}</a></div>`;
+  return `
+    <div class="field"><label>${t('email')}</label><input type="email" id="login-email" placeholder="anna.bjork@example.is"></div>
+    <div class="field"><label>${t('pass')}</label><input type="password" id="login-pass" placeholder="••••"></div>
+    <button class="btn btn-primary" id="btn-login">${t('btn_login')}</button>
+    <button class="btn btn-teal" id="btn-staff-login">${t('btn_staff_login')}</button>
+    <button class="btn btn-clay" id="btn-admin-login">${t('btn_admin_login')}</button>
+    <div class="switch-link">${t('no_account')} <a id="go-registro">${t('signup')}</a></div>
+    <div class="switch-link" style="margin-top:-4px;"><a id="go-forgot">${t('forgot_password')}</a></div>`;
+}
+function renderAuth(){
+  const m = authScreenMeta();
+  return `
+  <div class="auth-screen">
+    <div class="auth-hero">${m.eyebrow ? `<div class="eyebrow">${m.eyebrow}</div>` : ''}<h1>${m.title}</h1><p>${m.sub}</p></div>
+    ${authFieldsHtml()}
+  </div>`;
+}
+// Desktop split-screen login/register/forgot (T4) — brand/trust panel on the
+// left, the exact same form fields as mobile (via authFieldsHtml(), so every
+// input id and button id bindEvents() already wires up keeps working
+// unchanged) on the right. Mockup: designs/desktop-staff/desktop-client-mockup.html
+function renderDesktopAuth(){
+  const m = authScreenMeta();
+  return `
+  <div class="ds-auth-wrap">
+    <div class="ds-split">
+      <div class="ds-split-brand">
+        <div>
+          <div class="ds-eyebrow">${t('welcome_eyebrow')}</div>
+          <h1>Þvottafélagið</h1>
+          <p>${t('brand_trust_copy')}</p>
+        </div>
+        <div class="ds-trust">
+          <div class="ds-trust-row"><span class="ds-dot"></span>${t('trust_1')}</div>
+          <div class="ds-trust-row"><span class="ds-dot"></span>${t('trust_2')}</div>
+          <div class="ds-trust-row"><span class="ds-dot"></span>${t('trust_3')}</div>
+        </div>
+      </div>
+      <div class="ds-split-form">
+        ${m.eyebrow ? `<div class="ds-form-kicker">${m.eyebrow}</div>` : ''}
+        <h2>${m.title}</h2>
+        <p class="ds-form-sub">${m.sub}</p>
+        ${authFieldsHtml()}
+      </div>
+    </div>
   </div>`;
 }
 function renderRecoveryScreen(){
@@ -849,6 +1026,67 @@ function renderClienteView(){
   <div class="bottomnav">
     <button class="active"><span class="ic">🧺</span>${t('my_orders')}</button>
     <button id="btn-logout"><span class="ic">↩</span>${t('logout')}</button>
+  </div>`;
+}
+// Desktop My Orders (T4/E4): list+detail split, not a stacked mobile feed.
+// Reuses pipelineHtml()/priceBlockHtml() verbatim for the detail pane — only
+// the outer split-pane container and the compact list-row template are new
+// markup. Mockup: designs/desktop-staff/desktop-client-mockup.html
+function renderDesktopClienteView(){
+  const user = db.users.find(u=>u.id===session.userId);
+  const allOrdenes = db.orders.filter(o=>o.userId===session.userId).sort((a,b)=>b.creado-a.creado);
+  const activeOrdenes = allOrdenes.filter(o=>o.estado!=='entregado');
+  const historyOrdenes = allOrdenes.filter(o=>o.estado==='entregado');
+  const shown = clientSubTab==='active' ? activeOrdenes : historyOrdenes;
+  if(!selectedOrderId || !shown.find(o=>o.id===selectedOrderId)) selectedOrderId = shown.length ? shown[0].id : null;
+  const selected = shown.find(o=>o.id===selectedOrderId) || null;
+  const lastNote = selected ? selected.notas[selected.notas.length-1] : null;
+  return `
+  <div class="ds-shell">
+    <aside class="ds-sidebar">
+      <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('my_orders')}</span></div>
+      <div class="ds-sidebar-foot">${t('signed_in_as')} ${user ? user.name : ''}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
+    </aside>
+    <main class="ds-main">
+      <div class="ds-topbar">
+        <div><h1>${t('hello')}, ${user ? user.name.split(' ')[0] : ''}</h1></div>
+        <div class="ds-topbar-actions">
+          <button class="btn btn-primary ds-new-order-btn" id="btn-nueva-orden">${t('new_order')}</button>
+          ${renderLangSwitch()}
+        </div>
+      </div>
+      <div class="ds-client-cols">
+        <div class="ds-list-panel">
+          <div class="ds-list-head">
+            <h2>${t('my_orders')}</h2>
+            <div class="staff-tabs">
+              <button data-clientsubtab="active" class="${clientSubTab==='active'?'active':''}">${t('tab_active')} (${activeOrdenes.length})</button>
+              <button data-clientsubtab="history" class="${clientSubTab==='history'?'active':''}">${t('tab_history')} (${historyOrdenes.length})</button>
+            </div>
+          </div>
+          ${shown.length===0 ? `<div class="ds-list-empty">${clientSubTab==='active'?t('empty_orders_title'):t('no_history_title')}</div>` :
+            shown.map(o=>{
+              const itemsStr = o.items.map(it=>{ const p=priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+              return `<div class="ds-order-row ${o.id===selectedOrderId?'active':''}" data-orderrow="${o.id}">
+                <div class="oid">${o.id}</div>
+                <div class="items">${itemsStr}</div>
+                <span class="badge ${o.estado}">${statusLabel(o.estado)}</span>
+              </div>`;
+            }).join('')}
+        </div>
+        <div class="ds-detail-panel">
+          ${!selected ? `<div class="ds-list-empty">${clientSubTab==='active'?t('empty_orders_sub'):t('no_history_sub')}</div>` : `
+          <h2>${selected.id}</h2>
+          <p class="sub">${t('requested_delivery')}: ${fmtFecha(selected.fecha)}</p>
+          ${selected.pickup && selected.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${selected.pickupAddress}</div>` : ''}
+          ${badgeRow(selected)}
+          ${pipelineHtml(selected.estado)}
+          ${priceBlockHtml(selected)}
+          ${lastNote ? `<div class="comment">📝 ${noteText(lastNote)}</div>` : ''}
+          `}
+        </div>
+      </div>
+    </main>
   </div>`;
 }
 function pipelineHtml(estado){
@@ -964,7 +1202,7 @@ function renderSheet(){
       ${totals.hasPending ? `<div class="note">${t('quote_pending_note')}</div>` : ''}
     </div>`}
 
-    <div class="field"><label>${t('req_date')}</label><input type="date" id="orden-fecha"></div>
+    <div class="field"><label>${isManual ? t('req_date_manual') : t('req_date')}</label><input type="date" id="orden-fecha" value="${orderDraftFecha}" ${isManual ? '' : `min="${todayISO()}"`}></div>
     <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}"></textarea></div>
     <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${t('submit_order')}</button>
     <button class="btn btn-ghost" id="btn-cancel-orden" style="width:100%;">${t('cancel')}</button>
@@ -987,8 +1225,78 @@ function renderStaffView(){
   </div>`;
 }
 
-function renderStaffToday(){
-  const orders = db.orders;
+// Desktop staff console (T3): sidebar nav + KPI-grid Today view, per the
+// approved mockup at designs/desktop-staff/desktop-mockup.html. Per the
+// locked eng-review scope (E2), ONLY the Today tab gets a true desktop
+// template (renderDesktopToday, below) — Orders/Clients/Dashboards/Emails
+// keep rendering their existing mobile-card functions verbatim inside this
+// shell's content pane, unstyled for desktop until a future pass. Admin role
+// keeps its mobile layout at every viewport width for the same reason: the
+// approved mockup only covers the 5-tab staff nav, not admin's 8-tab set.
+function renderDesktopStaffShell(){
+  const tabs = ['today','orders','clients','reports','emails'];
+  const tabIcons = {today:'📋', orders:'🧺', clients:'👥', reports:'📊', emails:'✉️'};
+  const tabLabels = {today:t('tab_today'), orders:t('orders_tab'), clients:t('clients_tab'), reports:t('reports_tab'), emails:t('emails_tab')};
+  const todaySummary = staffTab==='today' ? computeTodaySummary(db.orders, db.users) : null;
+  const content = staffTab==='today' ? renderDesktopToday(todaySummary)
+    : staffTab==='orders' ? renderStaffOrders()
+    : staffTab==='clients' ? renderStaffClients()
+    : staffTab==='reports' ? renderReports()
+    : renderStaffNotifications();
+  const locale = lang==='is' ? 'is-IS' : 'en-GB';
+  const dateStr = new Date().toLocaleDateString(locale, {weekday:'long', day:'2-digit', month:'long'});
+  const meta = todaySummary ? `${dateStr} — ${todaySummary.receivedToday.length} ${t('orders_received_today_meta')}` : '';
+  return `
+  <div class="ds-shell">
+    <aside class="ds-sidebar">
+      <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('staff_panel')}</span></div>
+      <nav class="ds-nav">${tabs.map(tb=>`<button data-stafftab="${tb}" class="${staffTab===tb?'active':''}">${tabIcons[tb]} ${tabLabels[tb]}</button>`).join('')}</nav>
+      <div class="ds-sidebar-foot">${t('signed_in_as')} ${t('tab_staff')}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
+    </aside>
+    <main class="ds-main">
+      <div class="ds-topbar">
+        <div><h1>${tabLabels[staffTab]}</h1>${meta ? `<div class="ds-meta">${meta}</div>` : ''}</div>
+        ${renderLangSwitch()}
+      </div>
+      <div class="ds-content">${content}</div>
+    </main>
+  </div>`;
+}
+
+function renderDesktopToday(s){
+  const cards = todaySummaryCards(s);
+  // Glance table only — full sortable/filterable list already lives in the
+  // Orders tab (reachable via the same data-quickfilter cards below).
+  const dueRows = s.dueToday.slice(0, 8);
+  return `
+  <div class="ds-kpi-grid">${cards.map(c=>`<button class="ds-kpi ${c.cls}" data-quickfilter="${c.key}"><div class="n">${c.n}</div><div class="l">${c.l}</div></button>`).join('')}</div>
+  <div class="ds-cols">
+    <div class="ds-panel">
+      <h2>${t('today_due')}</h2>
+      <p class="sub">${t('today_due_sub')}</p>
+      ${dueRows.length===0 ? `<p class="chart-sub">${t('no_due_today')}</p>` : `
+      <table class="ds-table">
+        <thead><tr><th>${t('col_order')}</th><th>${t('col_client')}</th><th>${t('col_items')}</th><th>${t('col_status')}</th></tr></thead>
+        <tbody>${dueRows.map(o=>{
+          const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+          return `<tr><td>${o.id}</td><td>${orderClientName(o)}</td><td>${itemsStr}</td><td><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></td></tr>`;
+        }).join('')}</tbody>
+      </table>`}
+    </div>
+    <div class="ds-panel">
+      <h2>${t('contract_dashboard_title')}</h2>
+      <p class="sub">${t('contract_dashboard_sub')}</p>
+      ${s.contractToday.length===0 ? `<p class="chart-sub">${t('no_contract_activity')}</p>` :
+        s.contractToday.map(c=>`<div class="price-line"><span class="name">${c.name}</span><span class="qty">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>`).join('')}
+      <div class="ds-note">${t('contract_activity_note')}</div>
+    </div>
+  </div>`;
+}
+
+// Pure aggregation, shared by mobile renderStaffToday() and desktop
+// renderDesktopToday() (T3/E3) — takes plain data in so it's also callable
+// from node --test without booting the whole app (see E7/test/layout.test.js).
+function computeTodaySummary(orders, users){
   const dueToday = orders.filter(o=>o.fecha===todayISO() && o.estado!=='entregado');
   const receivedToday = orders.filter(o=>isToday(o.creado));
   const overdue = orders.filter(isOverdue);
@@ -996,29 +1304,37 @@ function renderStaffToday(){
   const problems = orders.filter(o=>o.problem);
   const inProgress = orders.filter(o=>o.estado==='en-proceso');
   const ready = orders.filter(o=>o.estado==='listo');
-  const cards = [
-    {key:'due-today', n:dueToday.length, l:t('today_due'), cls:''},
-    {key:'received-today', n:receivedToday.length, l:t('today_received'), cls:''},
-    {key:'overdue', n:overdue.length, l:t('today_overdue'), cls:overdue.length?'alert':''},
-    {key:'urgent', n:urgent.length, l:t('today_urgent'), cls:urgent.length?'warn':''},
-    {key:'problems', n:problems.length, l:t('today_problems'), cls:problems.length?'alert':''},
-    {key:'in-progress', n:inProgress.length, l:t('today_progress'), cls:''},
-    {key:'ready', n:ready.length, l:t('today_ready'), cls:''}
-  ];
-  const contractUsers = db.users.filter(u=>u.isContract);
+  const contractUsers = users.filter(u=>u.isContract);
   const contractToday = contractUsers.map(u=>{
-    const uOrders = db.orders.filter(o=>o.userId===u.id && isToday(o.creado));
+    const uOrders = orders.filter(o=>o.userId===u.id && isToday(o.creado));
     const qty = uOrders.reduce((s,o)=>s+o.items.reduce((s2,it)=>s2+it.cant,0),0);
     return {name:u.name, qty, orders:uOrders.length};
   }).filter(c=>c.orders>0).sort((a,b)=>b.qty-a.qty);
+  return {dueToday, receivedToday, overdue, urgent, problems, inProgress, ready, contractUsers, contractToday};
+}
 
+function todaySummaryCards(s){
+  return [
+    {key:'due-today', n:s.dueToday.length, l:t('today_due'), cls:''},
+    {key:'received-today', n:s.receivedToday.length, l:t('today_received'), cls:''},
+    {key:'overdue', n:s.overdue.length, l:t('today_overdue'), cls:s.overdue.length?'alert':''},
+    {key:'urgent', n:s.urgent.length, l:t('today_urgent'), cls:s.urgent.length?'warn':''},
+    {key:'problems', n:s.problems.length, l:t('today_problems'), cls:s.problems.length?'alert':''},
+    {key:'in-progress', n:s.inProgress.length, l:t('today_progress'), cls:''},
+    {key:'ready', n:s.ready.length, l:t('today_ready'), cls:''}
+  ];
+}
+
+function renderStaffToday(){
+  const s = computeTodaySummary(db.orders, db.users);
+  const cards = todaySummaryCards(s);
   return `<div class="today-grid">${cards.map(c=>`<button class="today-card ${c.cls}" data-quickfilter="${c.key}"><div class="n">${c.n}</div><div class="l">${c.l}</div></button>`).join('')}</div>
-  ${contractUsers.length ? `
+  ${s.contractUsers.length ? `
   <div class="subsection-title">${t('contract_dashboard_title')}</div>
   <div class="chart-card">
     <p class="chart-sub">${t('contract_dashboard_sub')}</p>
-    ${contractToday.length===0 ? `<p class="chart-sub">${t('no_contract_activity')}</p>` :
-      contractToday.map(c=>`
+    ${s.contractToday.length===0 ? `<p class="chart-sub">${t('no_contract_activity')}</p>` :
+      s.contractToday.map(c=>`
       <div class="price-line"><span class="qty-name">${c.name}</span><span class="amount">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>
     `).join('')}
   </div>` : ''}`;
@@ -1151,10 +1467,10 @@ function svgHBar(rows, opts){
     const bw = trackW*(r.value/max); const y=i*(barH+gap);
     const label = r.label.length>14 ? r.label.slice(0,13)+'…' : r.label;
     const valueLabel = opts.fmt ? opts.fmt(r.value) : r.value;
-    return `<text x="0" y="${y+barH*0.68}" font-size="10.5" font-weight="600" fill="#4A5568" font-family="Inter,sans-serif">${label}</text>
+    return `<text x="0" y="${y+barH*0.68}" font-size="10.5" font-weight="600" fill="#4A5568" font-family="Karla,sans-serif">${label}</text>
       <rect x="${leftPad}" y="${y}" width="${trackW}" height="${barH}" rx="6" fill="#F0EDE5"/>
       <rect x="${leftPad}" y="${y}" width="${Math.max(bw, r.value>0?4:0)}" height="${barH}" rx="6" fill="${r.color||'#2F8F86'}"/>
-      <text x="${w-rightPad}" y="${y+barH*0.68}" text-anchor="end" font-size="10.5" font-weight="700" fill="#1C2531" font-family="Inter,sans-serif">${valueLabel}</text>`;
+      <text x="${w-rightPad}" y="${y+barH*0.68}" text-anchor="end" font-size="10.5" font-weight="700" fill="#1C2531" font-family="Karla,sans-serif">${valueLabel}</text>`;
   }).join('');
   const totalH = rows.length*(barH+gap)-gap;
   return `<svg viewBox="0 0 ${w} ${Math.max(totalH,barH)+4}" width="100%" style="overflow:visible">${body}</svg>`;
@@ -1170,7 +1486,7 @@ function svgVolumeLine(days){
   const labels = pts.map((p,i)=>{
     if(i%3!==0 && i!==pts.length-1) return '';
     const lbl = p.date.toLocaleDateString(lang==='is'?'is-IS':'en-GB',{day:'2-digit',month:'2-digit'});
-    return `<text x="${p.x.toFixed(1)}" y="${h}" font-size="8.5" fill="#8a929e" text-anchor="middle" font-family="Inter,sans-serif">${lbl}</text>`;
+    return `<text x="${p.x.toFixed(1)}" y="${h}" font-size="8.5" fill="#8a929e" text-anchor="middle" font-family="Karla,sans-serif">${lbl}</text>`;
   }).join('');
   return `<svg viewBox="-16 0 ${w+32} ${h+6}" width="100%" style="overflow:visible"><path d="${areaD}" fill="rgba(47,143,134,.12)" stroke="none"/><path d="${pathD}" fill="none" stroke="#2F8F86" stroke-width="2"/>${dots}${labels}</svg>`;
 }
@@ -1281,6 +1597,64 @@ function computeVolumeReport(startISO, endISO, clientId){
   return { days, activeProductIds, totals, orderCount: orders.length };
 }
 
+/* ---- T7+E5: per-category ISK billing summary for a single contract client
+   over a date range. Reuses computeVolumeReport's date/client filtering
+   approach and adapts computeReports()'s categoryRevenue accumulator
+   (keyed by the same CATEGORIES enum) rather than re-deriving cost
+   aggregation from scratch. "other"-category items with no price yet
+   (computeItemCost===null) are excluded from every total and surfaced via
+   pendingCount instead of being counted as zero. catRows always contains
+   all four CATEGORIES keys (defaulting to 0) so a zero-order range still
+   renders a complete all-zero table rather than an empty one. ----*/
+function computeBillingSummary(startISO, endISO, clientId){
+  const start = new Date(startISO+'T00:00:00');
+  const end = new Date(endISO+'T00:00:00'); end.setDate(end.getDate()+1); // exclusive upper bound
+  const orders = db.orders.filter(o=>{
+    if(o.creado < start.getTime() || o.creado >= end.getTime()) return false;
+    if(clientId && clientId!=='all' && o.userId!==clientId) return false;
+    return true;
+  });
+  const categoryTotals = {}; let pendingCount = 0;
+  orders.forEach(o=>{
+    o.items.forEach(it=>{
+      const p = priceEntry(it.tipo);
+      const cost = computeItemCost(it);
+      if(cost===null){ pendingCount++; return; }
+      categoryTotals[p.category] = (categoryTotals[p.category]||0) + cost;
+    });
+  });
+  const catRows = Object.keys(CATEGORIES).map(cat=>({cat, label:CATEGORIES[cat][lang], value: categoryTotals[cat]||0}));
+  const itemsTotal = catRows.reduce((s,r)=>s+r.value,0);
+  const transportes = orders.reduce((s,o)=>s
+    + (o.returnMethod==='delivery' ? db.settings.deliveryFee : 0)
+    + (o.pickup ? db.settings.pickupFee : 0), 0);
+  const expressFee = orders.reduce((s,o)=>{
+    if(!o.urgent) return s;
+    const orderItemsTotal = o.items.reduce((si,it)=>{ const c = computeItemCost(it); return c===null ? si : si+c; }, 0);
+    return s + Math.round(orderItemsTotal * (db.settings.expressPercent/100));
+  }, 0);
+  const discount = db.settings.discountPercent ? Math.round(itemsTotal * (db.settings.discountPercent/100)) : 0;
+  const grandTotal = Math.max(0, itemsTotal + transportes + expressFee - discount);
+  return { catRows, transportes, expressFee, discount, grandTotal, pendingCount, orderCount: orders.length };
+}
+
+function renderBillingSummary(){
+  const b = computeBillingSummary(volumeStart, volumeEnd, volumeClientFilter);
+  return `
+    <div class="chart-card billing-summary">
+      <h3>${t('billing_summary')}</h3><p class="chart-sub">${t('billing_summary_sub')}</p>
+      <div class="price-block">
+        ${b.catRows.map(r=>`<div class="price-line"><span>${r.label}</span><span class="amount">${fmtISK(r.value)}</span></div>`).join('')}
+        <div class="price-line"><span>${t('billing_transportes')}</span><span class="amount">${fmtISK(b.transportes)}</span></div>
+        ${b.expressFee>0 ? `<div class="price-line"><span>${t('express_fee')}</span><span class="amount">${fmtISK(b.expressFee)}</span></div>` : ''}
+        ${b.discount>0 ? `<div class="price-line"><span>${t('discount')}</span><span class="amount">-${fmtISK(b.discount)}</span></div>` : ''}
+        <div class="price-total"><span>${t('billing_total')}</span><span class="amount">${fmtISK(b.grandTotal)}</span></div>
+      </div>
+      ${b.pendingCount>0 ? `<p class="chart-sub"><span class="badge-mini problem">${t('quote_pending_item')}</span> ${b.pendingCount} ${t('billing_pending_note')}</p>` : ''}
+    </div>
+  `;
+}
+
 function renderVolumeReport(){
   const contractClients = db.users.filter(u=>u.isContract);
   const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
@@ -1314,6 +1688,7 @@ function renderVolumeReport(){
       <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
       `}
     </div>
+    ${volumeClientFilter!=='all' ? renderBillingSummary() : ''}
   `;
 }
 
@@ -1634,8 +2009,8 @@ function bindEvents(){
     sheetMode = 'client';
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
+    orderDraftFecha = '';
     sheetOpen = true; render();
-    const f = document.getElementById('orden-fecha'); if(f){ f.min = new Date().toISOString().slice(0,10); }
   };
   const btnLogOrder = document.getElementById('btn-log-order');
   if(btnLogOrder) btnLogOrder.onclick = ()=>{
@@ -1643,8 +2018,8 @@ function bindEvents(){
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     orderDraftManualClientId = ''; orderDraftManualName = '';
+    orderDraftFecha = todayISO();
     sheetOpen = true; render();
-    const f = document.getElementById('orden-fecha'); if(f){ f.min = new Date().toISOString().slice(0,10); }
   };
   const btnCancel = document.getElementById('btn-cancel-orden'); if(btnCancel) btnCancel.onclick=()=>{ sheetOpen=false; render(); };
   const backdrop = document.getElementById('sheet-backdrop'); if(backdrop) backdrop.onclick=()=>{ sheetOpen=false; render(); };
@@ -1653,6 +2028,8 @@ function bindEvents(){
   if(manualClientSelect) manualClientSelect.onchange = ()=>{ orderDraftManualClientId = manualClientSelect.value; };
   const manualClientName = document.getElementById('manual-client-name');
   if(manualClientName) manualClientName.oninput = ()=>{ orderDraftManualName = manualClientName.value; };
+  const ordenFecha = document.getElementById('orden-fecha');
+  if(ordenFecha) ordenFecha.oninput = ()=>{ orderDraftFecha = ordenFecha.value; };
   app.querySelectorAll('input[name="return-method"]').forEach(el=>el.onchange=()=>{ orderDraftMods.returnMethod = el.value; render(); });
 
   const addItemBtn = document.getElementById('add-item-btn');
@@ -1718,7 +2095,8 @@ function bindEvents(){
     } catch(e){ console.error('submit order', e); toast(t('err_generic')); }
   };
 
-  app.querySelectorAll('[data-clientsubtab]').forEach(b=>b.onclick=()=>{ clientSubTab=b.dataset.clientsubtab; render(); });
+  app.querySelectorAll('[data-clientsubtab]').forEach(b=>b.onclick=()=>{ clientSubTab=b.dataset.clientsubtab; selectedOrderId=null; render(); });
+  app.querySelectorAll('[data-orderrow]').forEach(b=>b.onclick=()=>{ selectedOrderId=b.dataset.orderrow; render(); });
   app.querySelectorAll('[data-stafftab]').forEach(b=>b.onclick=()=>{ staffTab=b.dataset.stafftab; staffQuickFilter=null; addingClient=false; editingClientId=null; render(); });
   app.querySelectorAll('[data-admintab]').forEach(b=>b.onclick=()=>{ adminTab=b.dataset.admintab; editingProductId=null; addingProduct=false; addingClient=false; editingClientId=null; render(); });
   app.querySelectorAll('[data-quickfilter]').forEach(b=>b.onclick=()=>{ staffQuickFilter=b.dataset.quickfilter; staffFilter='todos'; staffClientFilter='todos'; staffTab='orders'; render(); });
