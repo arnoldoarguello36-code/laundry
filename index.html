@@ -378,7 +378,8 @@ const I18N = {
     req_date_manual:"Ready by",
     comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
     opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
-    pickup_address_label:"Pickup address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Pickup address",
+    pickup_address_label:"Pickup/delivery address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Address",
+    reg_address_label:"Address (optional)", reg_address_ph:"Street, number, floor/apt...", reg_address_note:"We'll use this to prefill your pickup/delivery address on future orders. You can change it any time.",
     pickup_section:"Home pickup (optional)",
     return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
     service_disabled:"Not offered right now",
@@ -527,7 +528,8 @@ const I18N = {
     req_date_manual:"Skiladagur",
     comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
     opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
-    pickup_address_label:"Heimilisfang fyrir sókn", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang fyrir sókn",
+    pickup_address_label:"Heimilisfang fyrir sókn/heimsendingu", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang",
+    reg_address_label:"Heimilisfang (valfrjálst)", reg_address_ph:"Gata, númer, hæð/íbúð...", reg_address_note:"Við notum þetta til að forfylla heimilisfang fyrir sókn/heimsendingu í framtíðarpöntunum. Þú getur breytt því hvenær sem er.",
     pickup_section:"Sækja heim (valfrjálst)",
     return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
     service_disabled:"Ekki í boði núna",
@@ -735,7 +737,7 @@ let db = {
 };
 
 function mapProfile(p){
-  return { id:p.id, name:p.name, email:p.email, phone:p.phone, registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, role: p.role, preferredLang: p.preferred_lang };
+  return { id:p.id, name:p.name, email:p.email, phone:p.phone, address:p.address||'', registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, role: p.role, preferredLang: p.preferred_lang };
 }
 function mapProduct(p){
   return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order, staffOnly: !!p.staff_only };
@@ -761,6 +763,18 @@ function orderClientName(o){
   if(o.clientName) return o.clientName;
   const u = db.users.find(u=>u.id===o.userId);
   return u ? u.name : t('client_unknown');
+}
+// Order-sheet address prefill (shared by the client self-service flow and
+// the staff manual-order flow, per the shared pickup/delivery address
+// block): resolves the saved profiles.address for a given client id, or ''
+// if none is saved. Purely a read for a one-time default — never writes
+// back to the profile.
+function clientAddressById(clientId){
+  const u = db.users.find(u=>u.id===clientId);
+  return (u && u.address) || '';
+}
+function clientOwnAddress(){
+  return clientAddressById(session.userId);
 }
 
 async function loadProducts(){
@@ -993,6 +1007,11 @@ function authFieldsHtml(){
     <div class="field"><label>${t('full_name')}</label><input id="reg-name" placeholder="Jón Jónsson"></div>
     <div class="field"><label>${t('email')}</label><input id="reg-email" type="email" placeholder="jon@example.is"></div>
     <div class="field"><label>${t('phone')}</label><input id="reg-phone" type="tel" placeholder="555-0199"></div>
+    <div class="field">
+      <label>${t('reg_address_label')}</label>
+      <input id="reg-address" placeholder="${t('reg_address_ph')}">
+      <div class="item-price-hint">${t('reg_address_note')}</div>
+    </div>
     <div class="field"><label>${t('pass')}</label><input id="reg-pass" type="password" placeholder="${t('create_pass')}"></div>
     <div class="field">
       <label>${t('preferred_lang_label')}</label>
@@ -1260,8 +1279,8 @@ function renderSheet(){
     <div class="pickup-section">
       <label>${t('pickup_section')}</label>
       <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
-      ${orderDraftMods.pickup ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${orderDraftMods.pickupAddress||''}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
     </div>` : ''}
+    ${(orderDraftMods.pickup || orderDraftMods.returnMethod==='delivery') ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${orderDraftMods.pickupAddress||''}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
 
     ${hidePrices ? '' : `
     <div class="order-total-preview">
@@ -1477,6 +1496,7 @@ function clientAddFormHtml(){
       <div class="field"><label>${t('email')}</label><input id="cf-email" type="email" placeholder="jon@example.is"></div>
     </div>
     <div class="field"><label>${t('phone')}</label><input id="cf-phone" type="tel" placeholder="${t('client_phone_ph')}"></div>
+    <div class="field"><label>${t('reg_address_label')}</label><input id="cf-address" placeholder="${t('reg_address_ph')}"></div>
     <div class="item-price-hint" style="margin-bottom:10px;">${t('client_setup_email_note')}</div>
     ${session.role==='admin' ? `<label class="checkbox-row"><input type="checkbox" id="cf-contract"> ${t('contract_client')}</label>` : ''}
     <div class="staff-actions">
@@ -1493,6 +1513,7 @@ function clientEditFormHtml(u){
       <div class="field"><label>${t('email')}</label><input id="ce-email" type="email" value="${u.email}"></div>
     </div>
     <div class="field"><label>${t('phone')}</label><input id="ce-phone" type="tel" value="${u.phone}"></div>
+    <div class="field"><label>${t('reg_address_label')}</label><input id="ce-address" value="${u.address||''}" placeholder="${t('reg_address_ph')}"></div>
     <label class="checkbox-row"><input type="checkbox" id="ce-notifications" ${u.notificationsEnabled!==false?'checked':''}> ${t('notifications_enabled')}</label>
     <div class="item-price-hint" style="margin-bottom:10px;">${t('notifications_off_hint')}</div>
     <label class="checkbox-row"><input type="checkbox" id="ce-contract" ${u.isContract?'checked':''}> ${t('contract_client')}</label>
@@ -2177,13 +2198,19 @@ function bindEvents(){
     const name = document.getElementById('reg-name').value.trim();
     const email = document.getElementById('reg-email').value.trim().toLowerCase();
     const phone = document.getElementById('reg-phone').value.trim();
+    const addressEl = document.getElementById('reg-address');
+    const address = addressEl ? addressEl.value.trim() : '';
     const pass = document.getElementById('reg-pass').value.trim();
     const preferredLangEl = document.getElementById('reg-preferred-lang');
     const preferredLang = preferredLangEl ? preferredLangEl.value : 'is';
     if(!name || !email || !phone || !pass){ toast(t('err_fill_all')); return; }
     if(pass.length < 6){ toast(t('err_password_short')); return; }
     try{
-      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang } } });
+      // address is optional — omitted (undefined) rather than sent as '' when
+      // blank so raw_user_meta_data ->> 'address' in handle_new_user() reads
+      // as null, matching the "nullable, not empty string" convention the
+      // rest of profiles.* already follows.
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang, address: address || undefined } } });
       if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
       if(data.session){
         const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
@@ -2219,7 +2246,10 @@ function bindEvents(){
   if(btnNueva) btnNueva.onclick = ()=>{
     sheetMode = 'client';
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
-    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
+    // Prefill from the logged-in client's saved profiles.address, if any —
+    // a one-time default for this order draft only. Editing it here never
+    // writes back to the profile (only registration / staff edit-client do).
+    orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:clientOwnAddress()};
     orderDraftFecha = '';
     orderDraftComentarios = '';
     editingOrderId = null; orderEditOriginalItems = [];
@@ -2258,7 +2288,14 @@ function bindEvents(){
   const backdrop = document.getElementById('sheet-backdrop'); if(backdrop) backdrop.onclick=()=>{ sheetOpen=false; editingOrderId=null; orderEditOriginalItems=[]; render(); };
 
   const manualClientSelect = document.getElementById('manual-client-select');
-  if(manualClientSelect) manualClientSelect.onchange = ()=>{ orderDraftManualClientId = manualClientSelect.value; };
+  if(manualClientSelect) manualClientSelect.onchange = ()=>{
+    orderDraftManualClientId = manualClientSelect.value;
+    // Same prefill mechanism as the client self-service flow (clientAddressById),
+    // fired when staff pick an existing client for a manual order — re-render
+    // needed so the (shared) address field reflects the new default value.
+    orderDraftMods.pickupAddress = clientAddressById(orderDraftManualClientId);
+    render();
+  };
   const manualClientName = document.getElementById('manual-client-name');
   if(manualClientName) manualClientName.oninput = ()=>{ orderDraftManualName = manualClientName.value; };
   const ordenFecha = document.getElementById('orden-fecha');
@@ -2400,6 +2437,7 @@ function bindEvents(){
     const name = document.getElementById('cf-name').value.trim();
     const email = document.getElementById('cf-email').value.trim().toLowerCase();
     const phone = document.getElementById('cf-phone').value.trim();
+    const address = document.getElementById('cf-address').value.trim();
     const contractEl = document.getElementById('cf-contract');
     if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
     try{
@@ -2407,7 +2445,7 @@ function bindEvents(){
       // below sends them a link to set their own. sbAnon keeps this signUp from
       // clobbering the staff/admin caller's own session.
       const randomPass = Math.random().toString(36).slice(-10) + 'Aa1!';
-      const { data, error } = await sbAnon.auth.signUp({ email, password: randomPass, options: { data: { name, phone } } });
+      const { data, error } = await sbAnon.auth.signUp({ email, password: randomPass, options: { data: { name, phone, address: address || undefined } } });
       if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
       if(contractEl && contractEl.checked){
         const { error: updErr } = await sb.from('profiles').update({ is_contract: true }).eq('id', data.user.id);
@@ -2427,10 +2465,11 @@ function bindEvents(){
     const name = document.getElementById('ce-name').value.trim();
     const email = document.getElementById('ce-email').value.trim().toLowerCase();
     const phone = document.getElementById('ce-phone').value.trim();
+    const address = document.getElementById('ce-address').value.trim();
     if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
     try{
       const { error } = await sb.from('profiles').update({
-        name, email, phone,
+        name, email, phone, address: address || null,
         notifications_enabled: document.getElementById('ce-notifications').checked,
         is_contract: document.getElementById('ce-contract').checked
       }).eq('id', u.id);
