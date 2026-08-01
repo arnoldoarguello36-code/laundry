@@ -3,11 +3,15 @@
 // introduced by T7+E5 (billing summary panel) and E1 (see layout.test.js).
 // Run with: node --test test/
 //
-// computeBillingSummary() and its direct dependencies (CATEGORIES,
-// priceEntry, computeItemCost) are extracted verbatim from index.html and
-// evaluated in an isolated vm context - no DOM, no Supabase client, no new
-// build step/framework. `db` and `lang` are the only free globals these
+// computeBillingSummary() and its direct dependencies (priceEntry,
+// computeItemCost) are extracted verbatim from index.html and evaluated in
+// an isolated vm context - no DOM, no Supabase client, no new build
+// step/framework. `db` and `lang` are the only free globals these
 // functions read, so the sandbox just needs to provide those two.
+//
+// Grouping was changed from per-category to per-product-type by the
+// desktop-layout-redesign plan-design-review pass; productRows only lists
+// products with a nonzero total for the range (sorted by sortOrder).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -17,7 +21,6 @@ const { readAppSource, extractFunction, extractConst } = require('./lib/extract-
 function loadBilling(){
   const source = readAppSource();
   const code = [
-    extractConst(source, 'CATEGORIES'),
     extractFunction(source, 'priceEntry'),
     extractFunction(source, 'computeItemCost'),
     extractFunction(source, 'computeBillingSummary'),
@@ -29,10 +32,10 @@ function loadBilling(){
 }
 
 const PRODUCTS = [
-  { id:'sheet', key:'sheet', price:500, category:'bedding' },
-  { id:'shirt', key:'shirt', price:300, category:'apparel' },
-  { id:'towel', key:'towel', price:200, category:'general' },
-  { id:'other', key:'other', price:null, category:'other' },
+  { id:'sheet', key:'sheet', price:500, category:'bedding', sortOrder:1, en:'Sheet', is:'Sæng' },
+  { id:'shirt', key:'shirt', price:300, category:'apparel', sortOrder:2, en:'Shirt', is:'Skyrta' },
+  { id:'towel', key:'towel', price:200, category:'general', sortOrder:3, en:'Towel', is:'Handklæði' },
+  { id:'other', key:'other', price:null, category:'other', sortOrder:4, en:'Other', is:'Annað' },
 ];
 
 const RANGE_START = '2026-07-01';
@@ -43,17 +46,16 @@ function order(id, items, extra){
   return Object.assign({ id, userId:'u1', creado: IN_RANGE, items, returnMethod:'store', pickup:false }, extra||{});
 }
 
-function catValue(result, cat){
-  return result.catRows.find(r=>r.cat===cat).value;
+function productValue(result, key){
+  const row = result.productRows.find(r=>r.key===key);
+  return row ? row.value : 0;
 }
 
-test('zero orders in range: all four categories present at 0, no pending, zero totals', () => {
+test('zero orders in range: no product rows, no pending, zero totals', () => {
   const sb = loadBilling();
   sb.db = { orders: [], settings: { deliveryFee:500, pickupFee:300 }, products: PRODUCTS };
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
-  assert.equal(result.catRows.length, 4);
-  assert.deepEqual(result.catRows.map(r=>r.cat).sort(), ['apparel','bedding','general','other']);
-  for(const row of result.catRows) assert.equal(row.value, 0);
+  assert.equal(result.productRows.length, 0);
   assert.equal(result.transportes, 0);
   assert.equal(result.grandTotal, 0);
   assert.equal(result.pendingCount, 0);
@@ -68,7 +70,7 @@ test('all-pending "other" items: excluded from every total, counted via pendingC
     products: PRODUCTS,
   };
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
-  for(const row of result.catRows) assert.equal(row.value, 0);
+  assert.equal(result.productRows.length, 0);
   assert.equal(result.pendingCount, 1);
   assert.equal(result.grandTotal, 0);
   assert.equal(result.transportes, 0);
@@ -82,15 +84,13 @@ test('mixed priced/unpriced items: priced item counted, unpriced "other" item ex
     products: PRODUCTS,
   };
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
-  assert.equal(catValue(result, 'bedding'), 1000);
-  assert.equal(catValue(result, 'apparel'), 0);
-  assert.equal(catValue(result, 'general'), 0);
-  assert.equal(catValue(result, 'other'), 0);
+  assert.equal(result.productRows.length, 1);
+  assert.equal(productValue(result, 'sheet'), 1000);
   assert.equal(result.pendingCount, 1);
   assert.equal(result.grandTotal, 1000);
 });
 
-test('single category: only the touched category accrues a subtotal', () => {
+test('single product: only the touched product accrues a subtotal', () => {
   const sb = loadBilling();
   sb.db = {
     orders: [ order('o1', [ {tipo:'sheet', cant:1}, {tipo:'sheet', cant:1} ]) ],
@@ -98,13 +98,12 @@ test('single category: only the touched category accrues a subtotal', () => {
     products: PRODUCTS,
   };
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
-  assert.equal(catValue(result, 'bedding'), 1000);
-  assert.equal(catValue(result, 'apparel'), 0);
-  assert.equal(catValue(result, 'general'), 0);
+  assert.equal(result.productRows.length, 1);
+  assert.equal(productValue(result, 'sheet'), 1000);
   assert.equal(result.grandTotal, 1000);
 });
 
-test('multiple categories: each accrues its own independent subtotal', () => {
+test('multiple products: each accrues its own independent subtotal, sorted by sortOrder', () => {
   const sb = loadBilling();
   sb.db = {
     orders: [ order('o1', [ {tipo:'sheet', cant:1}, {tipo:'shirt', cant:1}, {tipo:'towel', cant:1} ]) ],
@@ -112,10 +111,10 @@ test('multiple categories: each accrues its own independent subtotal', () => {
     products: PRODUCTS,
   };
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
-  assert.equal(catValue(result, 'bedding'), 500);
-  assert.equal(catValue(result, 'apparel'), 300);
-  assert.equal(catValue(result, 'general'), 200);
-  assert.equal(catValue(result, 'other'), 0);
+  assert.deepEqual(result.productRows.map(r=>r.key), ['sheet','shirt','towel']);
+  assert.equal(productValue(result, 'sheet'), 500);
+  assert.equal(productValue(result, 'shirt'), 300);
+  assert.equal(productValue(result, 'towel'), 200);
   assert.equal(result.grandTotal, 1000);
 });
 
@@ -132,8 +131,8 @@ test('Transportes combines delivery_fee + pickup_fee across orders in range', ()
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
   // o1 contributes both fees (delivery + pickup), o2 contributes neither.
   assert.equal(result.transportes, 800);
-  assert.equal(catValue(result, 'bedding'), 500);
-  assert.equal(catValue(result, 'apparel'), 300);
+  assert.equal(productValue(result, 'sheet'), 500);
+  assert.equal(productValue(result, 'shirt'), 300);
   assert.equal(result.grandTotal, 500 + 300 + 800);
 });
 
@@ -149,8 +148,8 @@ test('clientId filter: only the matching client\'s orders are counted, others ex
   };
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'u2');
   assert.equal(result.orderCount, 1);
-  assert.equal(catValue(result, 'bedding'), 0);
-  assert.equal(catValue(result, 'apparel'), 300);
+  assert.equal(productValue(result, 'sheet'), 0);
+  assert.equal(productValue(result, 'shirt'), 300);
   assert.equal(result.grandTotal, 300);
 });
 
@@ -171,9 +170,9 @@ test('date range boundaries: orders before start or on/after the day after end a
   const result = sb.computeBillingSummary(RANGE_START, RANGE_END, 'all');
   // Only the order dated on the last inclusive day (RANGE_END) should count.
   assert.equal(result.orderCount, 1);
-  assert.equal(catValue(result, 'apparel'), 300);
-  assert.equal(catValue(result, 'bedding'), 0);
-  assert.equal(catValue(result, 'general'), 0);
+  assert.equal(productValue(result, 'shirt'), 300);
+  assert.equal(productValue(result, 'sheet'), 0);
+  assert.equal(productValue(result, 'towel'), 0);
   assert.equal(result.grandTotal, 300);
 });
 
