@@ -77,12 +77,41 @@
     .ds-topbar-actions{display:flex;align-items:center;gap:14px;}
     .ds-new-order-btn{width:auto;padding:11px 20px;font-size:14px;}
 
+    /* --- T5: admin desktop shell — card-list tabs (orders/clients/quotes/failed)
+       reuse the mobile card markup as-is, laid out as a responsive grid instead
+       of a single stacked column; controls above the list (add buttons, filter
+       bars, banners, inline edit forms) span the full width. --- */
+    .ds-content-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start;}
+    .ds-content-cards > .add-item,
+    .ds-content-cards > .quick-chip,
+    .ds-content-cards > .client-select-row,
+    .ds-content-cards > .filters,
+    .ds-content-cards > .empty-state,
+    .ds-content-cards > .admin-banner,
+    .ds-content-cards > .product-edit-form{grid-column:1/-1;}
+    /* Form-heavy tabs (products/pricing) stay single-column at a readable width. */
+    .ds-content-form{max-width:640px;}
+
+    /* --- T6: bespoke desktop dashboard (Reports/Volume) — a distinct visual
+       language from the T3 Today ds-kpi/ds-panel shell: a KPI hero strip
+       above a bento grid of chart cards. Shared by staff & admin desktop
+       shells (both call renderDesktopReports(); Volume is admin-only). --- */
+    .dash-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:24px;box-shadow:var(--shadow-sm);}
+    .dash-hero-cell{background:var(--card);padding:20px 18px;}
+    .dash-hero-cell .v{font-family:'Fraunces',serif;font-size:26px;font-weight:600;color:var(--ink);}
+    .dash-hero-cell .l{font-size:11px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}
+    .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;align-items:start;margin-bottom:18px;}
+    .dash-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow-sm);}
+    .dash-card.span-2{grid-column:span 2;}
+    .dash-card.span-3{grid-column:1/-1;}
+    .dash-card h3{font-size:14px;margin:0 0 3px;}
+    .dash-card .sub{font-size:11.5px;color:var(--ink-soft);margin:0 0 14px;}
+
     /* --- T4: desktop split-screen login/register/forgot --- */
     .ds-auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 24px;}
     .ds-split{max-width:1040px;width:100%;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);min-height:560px;}
     .ds-split-brand{background:var(--ink);color:#fff;padding:56px 48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;}
     .ds-split-brand::after{content:"";position:absolute;right:-60px;bottom:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(47,143,134,.35),transparent 70%);}
-    .ds-split-brand h1{font-size:32px;margin:14px 0 12px;color:#fff;}
     .ds-split-brand p{color:#C7CEDA;font-size:15px;line-height:1.6;max-width:340px;position:relative;z-index:1;}
     .ds-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--teal);font-weight:700;position:relative;z-index:1;}
     .ds-trust{margin-top:auto;display:flex;flex-direction:column;gap:14px;position:relative;z-index:1;}
@@ -90,7 +119,7 @@
     .ds-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;}
     .ds-split-form{background:var(--card);padding:56px 48px;display:flex;flex-direction:column;justify-content:center;overflow-y:auto;}
     .ds-form-kicker{font-size:12px;color:var(--teal-dark);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
-    .ds-split-form h2{font-size:24px;margin:0 0 8px;}
+    .ds-split-form h1{font-size:24px;margin:0 0 8px;}
     .ds-form-sub{color:var(--ink-soft);font-size:14px;margin:0 0 22px;}
 
     /* --- T4/E4: desktop client My Orders (list + detail) --- */
@@ -372,7 +401,7 @@ const I18N = {
     billing_pending_note:"item(s) awaiting a price — excluded from the total above",
     all:"All", client_label:"Client:", all_clients:"All clients",
     no_orders_filter:"No orders here", no_orders_filter_sub:"There are no orders matching this filter yet.",
-    client_says:"Client", advance_to:"Advance to", flag_issue:"Flag issue", resolve_issue:"Resolve issue",
+    client_says:"Client", advance_to:"Advance to", mark_delivered:"✓ Delivered today", flag_issue:"Flag issue", resolve_issue:"Resolve issue",
     note_ph:"Add a note for the client...", send:"Send",
     orders_count:"orders", view_orders:"View orders",
     no_clients_title:"No clients yet", no_clients_sub:"Clients will appear here once they register.",
@@ -395,8 +424,8 @@ const I18N = {
     today_due_sub:"Orders that need to move before end of day.", col_order:"Order", col_client:"Client", col_items:"Items", col_status:"Status",
     signed_in_as:"Signed in as", no_due_today:"Nothing due today.",
     orders_received_today_meta:"orders received today", contract_activity_note:"Full billing breakdown is available to admins under Volume.",
-    welcome_eyebrow:"Welcome", brand_trust_copy:"Track your garments and place new orders in seconds — Iceland's laundry service for people who'd rather spend the time on something else.",
-    trust_1:"Same-day and next-day turnaround", trust_2:"Free pickup for contract clients", trust_3:"Live order status, no phone calls needed",
+    welcome_eyebrow:"Welcome", brand_trust_copy:"Track your garments and place new orders in seconds — Húsavík's laundry service for people who'd rather spend the time on something else.",
+    trust_1:"Same-day and next-day turnaround", trust_2:"Serving homes and businesses across Húsavík", trust_3:"Live order status, no phone calls needed",
 
     admin_intro:"Manage your catalog, pricing and view business reports — no code required.",
     add_product:"+ Add product", product_name_en:"Name (English)", product_name_is:"Name (Icelandic)",
@@ -516,7 +545,7 @@ const I18N = {
     billing_pending_note:"liður bíður verðs — ekki talinn með í samtölu hér að ofan",
     all:"Allt", client_label:"Viðskiptavinur:", all_clients:"Allir viðskiptavinir",
     no_orders_filter:"Engar pantanir hér", no_orders_filter_sub:"Engar pantanir passa við þessa síu ennþá.",
-    client_says:"Viðskiptavinur", advance_to:"Færa í", flag_issue:"Merkja vandamál", resolve_issue:"Merkja leyst",
+    client_says:"Viðskiptavinur", advance_to:"Færa í", mark_delivered:"✓ Afhent í dag", flag_issue:"Merkja vandamál", resolve_issue:"Merkja leyst",
     note_ph:"Bæta við athugasemd fyrir viðskiptavin...", send:"Senda",
     orders_count:"pantanir", view_orders:"Skoða pantanir",
     no_clients_title:"Engir viðskiptavinir ennþá", no_clients_sub:"Viðskiptavinir birtast hér þegar þeir skrá sig.",
@@ -539,8 +568,8 @@ const I18N = {
     today_due_sub:"Pantanir sem þarf að afgreiða fyrir lok dags.", col_order:"Pöntun", col_client:"Viðskiptavinur", col_items:"Vörur", col_status:"Staða",
     signed_in_as:"Innskráð(ur) sem", no_due_today:"Ekkert á gjalddaga í dag.",
     orders_received_today_meta:"pantanir mótteknar í dag", contract_activity_note:"Nánari sundurliðun fyrir reikningagerð er aðgengileg stjórnendum undir Magn.",
-    welcome_eyebrow:"Velkomin", brand_trust_copy:"Fylgstu með fötunum þínum og pantaðu á sekúndum — þvottaþjónusta Íslands fyrir fólk sem vill frekar eyða tímanum í eitthvað annað.",
-    trust_1:"Sama dags og næsta dags afgreiðsla", trust_2:"Frí sókn fyrir samningsviðskiptavini", trust_3:"Rauntíma staða pöntunar, engin símtöl þarf",
+    welcome_eyebrow:"Velkomin", brand_trust_copy:"Fylgstu með fötunum þínum og pantaðu á sekúndum — þvottaþjónusta Húsavíkur fyrir fólk sem vill frekar eyða tímanum í eitthvað annað.",
+    trust_1:"Sama dags og næsta dags afgreiðsla", trust_2:"Þjónustum heimili og fyrirtæki á Húsavík", trust_3:"Rauntíma staða pöntunar, engin símtöl þarf",
 
     admin_intro:"Sýslaðu með vörulista, verð og skoðaðu rekstrarskýrslur — engin kóðun nauðsynleg.",
     add_product:"+ Bæta við vöru", product_name_en:"Nafn (enska)", product_name_is:"Nafn (íslenska)",
@@ -847,23 +876,22 @@ function render(){
   if(!session.role){ app.innerHTML = isDesktop() ? renderDesktopAuth() : renderTopbar() + renderAuth(); }
   else if(session.role === 'client'){ app.innerHTML = isDesktop() ? renderDesktopClienteView() + renderSheet() : renderTopbar() + renderClienteView() + renderSheet(); }
   else if(session.role === 'staff'){ app.innerHTML = isDesktop() ? renderDesktopStaffShell() + renderSheet() : renderTopbar() + renderStaffView() + renderSheet(); }
-  else { app.innerHTML = renderTopbar() + renderAdminView() + renderSheet(); }
+  else { app.innerHTML = isDesktop() ? renderDesktopAdminShell() + renderSheet() : renderTopbar() + renderAdminView() + renderSheet(); }
   bindEvents();
 }
 function renderLangSwitch(){
   return `<div class="lang-switch"><button data-lang="en" class="${lang==='en'?'active':''}">EN</button><button data-lang="is" class="${lang==='is'?'active':''}">IS</button></div>`;
 }
-function renderTopbar(){
-  // Full lockup from the Fiverr logo kit (2026-07-17), used as delivered —
-  // icon + "Þvottafélagið" wordmark + "Hafðu það hreint" tagline are all
-  // baked into this one SVG, so it replaces the old icon-plus-separate-<div>
-  // approach entirely (no more t('brand_name')/t('brand_tag') text is
-  // rendered alongside it — that would just duplicate what's in the art).
-  // Note: the wordmark/tagline are vector paths in Icelandic only, baked in
-  // at export time — they do NOT respond to the EN/IS language switch. This
-  // is intentional per instruction to use the logo exactly as delivered;
-  // revisit if the client wants an English variant later.
-  const logo = `<svg width="260" height="78" viewBox="-8 199.127 591 176.747" style="flex-shrink:0;">
+// Full lockup from the Fiverr logo kit (2026-07-17), used as delivered —
+// icon + "Þvottafélagið" wordmark + "Hafðu það hreint" tagline are all
+// baked into this one SVG. Shared by renderTopbar() (mobile chrome) and
+// renderDesktopAuth() (desktop split-brand pane) so the two never drift.
+// Note: the wordmark/tagline are vector paths in Icelandic only, baked in
+// at export time — they do NOT respond to the EN/IS language switch. This
+// is intentional per instruction to use the logo exactly as delivered;
+// revisit if the client wants an English variant later.
+function brandLogoSvg(width, height){
+  return `<svg width="${width||260}" height="${height||78}" viewBox="-8 199.127 591 176.747" style="flex-shrink:0;">
     <g transform="rotate(0 80.37344360351562 287.50044360351563)"><svg xmlns:xlink="http://www.w3.org/1999/xlink" x="0" y="207.127" viewBox="11 -38.099998474121094 232.1999969482422 232.20001220703125" height="160.74688720703125" width="160.74688720703125" preserveAspectRatio="xMinYMin" style="overflow: visible;">
       <path fill-rule="evenodd" clip-rule="evenodd" d="M127.1-38.1c64.1,0,116.1,52,116.1,116.1s-52,116.1-116.1,116.1   C63,194.1,11,142.1,11,78S63-38.1,127.1-38.1L127.1-38.1z" style="fill: #F5F5F5; fill-opacity: 1;"></path>
       <path fill-rule="evenodd" clip-rule="evenodd" d="M127.1-34.4c62.1,0,112.4,50.3,112.4,112.4   s-50.3,112.4-112.4,112.4C65,190.5,14.7,140.1,14.7,78S65-34.4,127.1-34.4L127.1-34.4z" style="fill: #D9D9D9; fill-opacity: 1;"></path>
@@ -893,6 +921,9 @@ function renderTopbar(){
     <g transform="rotate(0 373.2649987792969 314.0399990081787)"><svg y="305" viewBox="1.690000057220459 5.470000267028809 321.30999755859375 18.079998016357422" x="212.61" height="18.079998016357422" width="321.30999755859375" style="overflow: visible;"><g fill="#4893E3" fill-opacity="1"><path d="M11.82 6.39L11.82 19.24L9.72 19.24L9.72 13.44L3.80 13.44L3.80 19.24L1.69 19.24L1.69 6.39L3.80 6.39L3.80 11.65L9.72 11.65L9.72 6.39L11.82 6.39ZM30.52 9.33L30.52 9.33Q32.36 9.33 33.31 10.14Q34.25 10.96 34.25 12.69L34.25 12.69L34.25 19.24L32.78 19.24L32.39 17.86L32.32 17.86Q31.91 18.39 31.47 18.73Q31.03 19.07 30.45 19.24Q29.88 19.42 29.05 19.42L29.05 19.42Q28.18 19.42 27.49 19.09Q26.81 18.77 26.41 18.11Q26.02 17.46 26.02 16.44L26.02 16.44Q26.02 14.94 27.14 14.19Q28.26 13.43 30.53 13.35L30.53 13.35L32.21 13.29L32.21 12.78Q32.21 11.77 31.74 11.34Q31.27 10.91 30.42 10.91L30.42 10.91Q29.69 10.91 29.01 11.12Q28.32 11.33 27.67 11.64L27.67 11.64L27.00 10.18Q27.71 9.80 28.62 9.56Q29.53 9.33 30.52 9.33ZM32.20 15.43L32.20 14.59L30.95 14.63Q29.40 14.69 28.78 15.16Q28.15 15.64 28.15 16.46L28.15 16.46Q28.15 17.18 28.58 17.51Q29.01 17.84 29.72 17.84L29.72 17.84Q30.79 17.84 31.50 17.23Q32.20 16.62 32.20 15.43L32.20 15.43ZM53.70 9.51L53.70 11.08L51.34 11.08L51.34 19.24L49.28 19.24L49.28 11.08L47.68 11.08L47.68 10.09L49.28 9.48L49.28 8.81Q49.28 7.57 49.67 6.84Q50.06 6.11 50.79 5.79Q51.53 5.47 52.54 5.47L52.54 5.47Q53.21 5.47 53.77 5.58Q54.32 5.69 54.70 5.83L54.70 5.83L54.16 7.39Q53.86 7.29 53.49 7.21Q53.12 7.13 52.70 7.13L52.70 7.13Q52.00 7.13 51.67 7.57Q51.34 8.01 51.34 8.85L51.34 8.85L51.34 9.51L53.70 9.51ZM68.79 6.75L69.53 5.48Q70.14 5.75 70.71 6.07Q71.28 6.39 71.79 6.75L71.79 6.75L73.81 5.53L74.56 6.65L72.92 7.64Q73.78 8.43 74.39 9.42Q75.00 10.41 75.33 11.61Q75.65 12.81 75.65 14.25L75.65 14.25Q75.65 15.92 75.09 17.07Q74.54 18.22 73.50 18.82Q72.47 19.42 71.04 19.42L71.04 19.42Q69.70 19.42 68.67 18.89Q67.65 18.36 67.07 17.37Q66.49 16.38 66.49 15.00L66.49 15.00Q66.49 13.61 67.01 12.63Q67.54 11.65 68.49 11.14Q69.44 10.62 70.70 10.62L70.70 10.62Q71.33 10.62 71.83 10.72Q72.33 10.83 72.71 11.04Q73.09 11.26 73.33 11.58L73.33 11.58L73.40 11.55Q73.11 10.66 72.61 9.91Q72.10 9.17 71.43 8.54L71.43 8.54L69.25 9.84L68.49 8.70L70.28 7.65Q69.94 7.42 69.56 7.19Q69.18 6.96 68.79 6.75L68.79 6.75ZM71.08 12.20L71.08 12.20Q70.21 12.20 69.66 12.52Q69.11 12.84 68.85 13.47Q68.60 14.11 68.60 15.04L68.60 15.04Q68.60 15.86 68.85 16.49Q69.11 17.12 69.66 17.47Q70.21 17.82 71.07 17.82L71.07 17.82Q72.37 17.82 72.95 17.01Q73.54 16.19 73.54 14.61L73.54 14.61Q73.54 14.12 73.40 13.69Q73.25 13.26 72.95 12.92Q72.66 12.59 72.19 12.39Q71.72 12.20 71.08 12.20ZM96.13 9.51L98.21 9.51L98.21 19.24L96.58 19.24L96.30 17.93L96.19 17.93Q95.88 18.43 95.40 18.76Q94.93 19.09 94.35 19.25Q93.77 19.42 93.13 19.42L93.13 19.42Q92.03 19.42 91.25 19.04Q90.47 18.67 90.06 17.89Q89.65 17.10 89.65 15.86L89.65 15.86L89.65 9.51L91.72 9.51L91.72 15.48Q91.72 16.61 92.18 17.17Q92.64 17.74 93.62 17.74L93.62 17.74Q94.56 17.74 95.11 17.35Q95.67 16.96 95.90 16.21Q96.13 15.45 96.13 14.35L96.13 14.35L96.13 9.51ZM138.06 14.35L138.06 14.35Q138.06 16.00 137.58 17.13Q137.10 18.26 136.24 18.84Q135.38 19.42 134.22 19.42L134.22 19.42Q133.48 19.42 132.93 19.23Q132.37 19.05 131.98 18.74Q131.58 18.44 131.31 18.06L131.31 18.06L131.20 18.06Q131.22 18.23 131.25 18.51Q131.28 18.78 131.29 19.07Q131.31 19.35 131.31 19.56L131.31 19.56L131.31 23.55L129.24 23.55L129.24 5.56L131.31 5.56L131.31 9.31Q131.31 9.66 131.28 10.12Q131.25 10.58 131.22 10.85L131.22 10.85L131.31 10.85Q131.58 10.42 131.98 10.08Q132.37 9.74 132.93 9.53Q133.49 9.33 134.23 9.33L134.23 9.33Q135.96 9.33 137.01 10.60Q138.06 11.87 138.06 14.35ZM135.94 14.33L135.94 14.33Q135.94 12.67 135.39 11.84Q134.83 11.01 133.68 11.01L133.68 11.01Q132.40 11.01 131.86 11.77Q131.33 12.53 131.31 14.04L131.31 14.04L131.31 14.35Q131.31 15.98 131.83 16.85Q132.36 17.72 133.70 17.72L133.70 17.72Q134.46 17.72 134.95 17.33Q135.45 16.94 135.70 16.18Q135.94 15.42 135.94 14.33ZM155.96 9.33L155.96 9.33Q157.80 9.33 158.75 10.14Q159.69 10.96 159.69 12.69L159.69 12.69L159.69 19.24L158.22 19.24L157.83 17.86L157.76 17.86Q157.35 18.39 156.91 18.73Q156.47 19.07 155.89 19.24Q155.32 19.42 154.49 19.42L154.49 19.42Q153.62 19.42 152.93 19.09Q152.25 18.77 151.85 18.11Q151.46 17.46 151.46 16.44L151.46 16.44Q151.46 14.94 152.58 14.19Q153.70 13.43 155.97 13.35L155.97 13.35L157.65 13.29L157.65 12.78Q157.65 11.77 157.18 11.34Q156.71 10.91 155.86 10.91L155.86 10.91Q155.13 10.91 154.44 11.12Q153.76 11.33 153.11 11.64L153.11 11.64L152.44 10.18Q153.15 9.80 154.06 9.56Q154.97 9.33 155.96 9.33ZM157.64 15.43L157.64 14.59L156.39 14.63Q154.84 14.69 154.22 15.16Q153.59 15.64 153.59 16.46L153.59 16.46Q153.59 17.18 154.02 17.51Q154.45 17.84 155.16 17.84L155.16 17.84Q156.23 17.84 156.94 17.23Q157.64 16.62 157.64 15.43L157.64 15.43ZM176.02 6.75L176.75 5.48Q177.37 5.75 177.94 6.07Q178.51 6.39 179.01 6.75L179.01 6.75L181.03 5.53L181.79 6.65L180.15 7.64Q181.01 8.43 181.62 9.42Q182.23 10.41 182.55 11.61Q182.88 12.81 182.88 14.25L182.88 14.25Q182.88 15.92 182.32 17.07Q181.76 18.22 180.73 18.82Q179.70 19.42 178.27 19.42L178.27 19.42Q176.93 19.42 175.90 18.89Q174.87 18.36 174.29 17.37Q173.71 16.38 173.71 15.00L173.71 15.00Q173.71 13.61 174.24 12.63Q174.77 11.65 175.72 11.14Q176.67 10.62 177.92 10.62L177.92 10.62Q178.56 10.62 179.06 10.72Q179.56 10.83 179.93 11.04Q180.31 11.26 180.56 11.58L180.56 11.58L180.63 11.55Q180.34 10.66 179.83 9.91Q179.33 9.17 178.65 8.54L178.65 8.54L176.47 9.84L175.72 8.70L177.51 7.65Q177.17 7.42 176.79 7.19Q176.41 6.96 176.02 6.75L176.02 6.75ZM178.31 12.20L178.31 12.20Q177.44 12.20 176.89 12.52Q176.34 12.84 176.08 13.47Q175.82 14.11 175.82 15.04L175.82 15.04Q175.82 15.86 176.08 16.49Q176.34 17.12 176.89 17.47Q177.44 17.82 178.30 17.82L178.30 17.82Q179.59 17.82 180.18 17.01Q180.77 16.19 180.77 14.61L180.77 14.61Q180.77 14.12 180.62 13.69Q180.48 13.26 180.18 12.92Q179.88 12.59 179.42 12.39Q178.95 12.20 178.31 12.20ZM213.33 5.56L215.39 5.56L215.39 9Q215.39 9.54 215.36 10.05Q215.33 10.56 215.30 10.84L215.30 10.84L215.41 10.84Q215.72 10.33 216.17 10.00Q216.62 9.67 217.17 9.50Q217.73 9.33 218.36 9.33L218.36 9.33Q219.48 9.33 220.26 9.71Q221.04 10.08 221.46 10.86Q221.88 11.65 221.88 12.89L221.88 12.89L221.88 19.24L219.81 19.24L219.81 13.28Q219.81 12.15 219.35 11.58Q218.88 11.01 217.91 11.01L217.91 11.01Q216.97 11.01 216.42 11.40Q215.87 11.79 215.63 12.56Q215.39 13.32 215.39 14.41L215.39 14.41L215.39 19.24L213.33 19.24L213.33 5.56ZM241.39 9.33L241.39 9.33Q241.64 9.33 241.93 9.35Q242.22 9.38 242.43 9.42L242.43 9.42L242.24 11.36Q242.05 11.30 241.78 11.28Q241.52 11.25 241.31 11.25L241.31 11.25Q240.75 11.25 240.25 11.43Q239.75 11.61 239.36 11.98Q238.98 12.34 238.76 12.88Q238.54 13.43 238.54 14.15L238.54 14.15L238.54 19.24L236.46 19.24L236.46 9.51L238.08 9.51L238.36 11.22L238.46 11.22Q238.75 10.71 239.18 10.27Q239.61 9.84 240.17 9.58Q240.73 9.33 241.39 9.33ZM259.81 9.33L259.81 9.33Q261.11 9.33 262.04 9.86Q262.97 10.40 263.47 11.38Q263.97 12.37 263.97 13.74L263.97 13.74L263.97 14.84L257.48 14.84Q257.51 16.26 258.24 17.02Q258.96 17.79 260.27 17.79L260.27 17.79Q261.21 17.79 261.95 17.61Q262.69 17.43 263.48 17.08L263.48 17.08L263.48 18.76Q262.75 19.10 262.00 19.26Q261.24 19.42 260.19 19.42L260.19 19.42Q258.75 19.42 257.67 18.86Q256.58 18.30 255.97 17.19Q255.36 16.08 255.36 14.44L255.36 14.44Q255.36 12.81 255.91 11.66Q256.47 10.52 257.47 9.92Q258.47 9.33 259.81 9.33ZM259.81 10.88L259.81 10.88Q258.83 10.88 258.23 11.51Q257.63 12.15 257.52 13.37L257.52 13.37L261.95 13.37Q261.94 12.64 261.71 12.08Q261.48 11.51 261.01 11.20Q260.54 10.88 259.81 10.88ZM278.00 9.51L280.07 9.51L280.07 19.24L278.00 19.24L278.00 9.51ZM279.05 5.78L279.05 5.78Q279.52 5.78 279.87 6.04Q280.22 6.29 280.22 6.92L280.22 6.92Q280.22 7.53 279.87 7.79Q279.52 8.05 279.05 8.05L279.05 8.05Q278.56 8.05 278.22 7.79Q277.88 7.53 277.88 6.92L277.88 6.92Q277.88 6.29 278.22 6.04Q278.56 5.78 279.05 5.78ZM299.79 9.33L299.79 9.33Q301.44 9.33 302.36 10.17Q303.27 11.02 303.27 12.89L303.27 12.89L303.27 19.24L301.21 19.24L301.21 13.28Q301.21 12.15 300.74 11.58Q300.28 11.01 299.30 11.01L299.30 11.01Q297.89 11.01 297.34 11.88Q296.79 12.75 296.79 14.41L296.79 14.41L296.79 19.24L294.72 19.24L294.72 9.51L296.33 9.51L296.62 10.83L296.73 10.83Q297.05 10.32 297.52 9.99Q297.99 9.66 298.58 9.49Q299.16 9.33 299.79 9.33ZM321.48 17.75L321.48 17.75Q321.88 17.75 322.28 17.67Q322.67 17.60 323.00 17.49L323.00 17.49L323.00 19.05Q322.66 19.20 322.11 19.31Q321.57 19.42 320.98 19.42L320.98 19.42Q320.15 19.42 319.49 19.14Q318.83 18.86 318.45 18.18Q318.06 17.51 318.06 16.31L318.06 16.31L318.06 11.08L316.73 11.08L316.73 10.16L318.16 9.43L318.83 7.35L320.13 7.35L320.13 9.51L322.92 9.51L322.92 11.08L320.13 11.08L320.13 16.29Q320.13 17.02 320.50 17.38Q320.87 17.75 321.48 17.75Z"></path></g></svg></g>
     <g transform="rotate(0 373.26500061035154 267.13999938964844)"><svg y="245" viewBox="3.950000047683716 13.319999694824219 403.4700012207031 44.279998779296875" x="171.53" height="44.279998779296875" width="403.4700012207031" style="overflow: visible;"><g fill="#000"><path d="M25.65 30.49L25.65 30.49Q25.65 32.51 25.05 34.34Q24.45 36.18 23.08 37.62Q21.72 39.06 19.46 39.90Q17.21 40.73 13.90 40.73L13.90 40.73L10.61 40.73L10.61 47.03L3.95 47.03L3.95 15.62L10.61 15.62L10.61 20.54L14.44 20.54Q20.24 20.54 22.95 23.25Q25.65 25.95 25.65 30.49ZM10.61 25.95L10.61 35.36L12.76 35.36Q14.82 35.36 16.19 34.87Q17.55 34.38 18.24 33.30Q18.93 32.23 18.93 30.49L18.93 30.49Q18.93 28.19 17.56 27.07Q16.20 25.95 13.28 25.95L13.28 25.95L10.61 25.95ZM53.19 47.03L46.46 47.03L37.31 23.01L44.16 23.01L48.80 36.70Q49.19 37.90 49.42 39.23Q49.64 40.56 49.73 41.62L49.73 41.62L49.90 41.62Q49.96 40.48 50.21 39.19Q50.46 37.90 50.87 36.70L50.87 36.70L55.48 23.01L62.34 23.01L53.19 47.03ZM97.28 34.98L97.28 34.98Q97.28 37.98 96.48 40.30Q95.67 42.63 94.14 44.23Q92.60 45.83 90.44 46.64Q88.28 47.46 85.57 47.46L85.57 47.46Q83.04 47.46 80.92 46.64Q78.81 45.83 77.25 44.23Q75.69 42.63 74.84 40.30Q73.99 37.98 73.99 34.98L73.99 34.98Q73.99 30.98 75.41 28.21Q76.83 25.44 79.45 24.00Q82.07 22.56 85.70 22.56L85.70 22.56Q89.08 22.56 91.69 24.00Q94.30 25.44 95.79 28.21Q97.28 30.98 97.28 34.98ZM80.68 34.98L80.68 34.98Q80.68 37.34 81.19 38.95Q81.71 40.56 82.80 41.38Q83.90 42.20 85.66 42.20L85.66 42.20Q87.40 42.20 88.49 41.38Q89.57 40.56 90.08 38.95Q90.58 37.34 90.58 34.98L90.58 34.98Q90.58 32.59 90.08 31.01Q89.57 29.43 88.48 28.64Q87.38 27.84 85.62 27.84L85.62 27.84Q83.02 27.84 81.85 29.63Q80.68 31.41 80.68 34.98ZM122.50 42.24L122.50 42.24Q123.57 42.24 124.59 42.02Q125.61 41.81 126.62 41.49L126.62 41.49L126.62 46.36Q125.57 46.84 124.01 47.15Q122.45 47.46 120.61 47.46L120.61 47.46Q118.46 47.46 116.75 46.76Q115.04 46.06 114.06 44.33Q113.09 42.60 113.09 39.51L113.09 39.51L113.09 27.93L109.95 27.93L109.95 25.16L113.56 22.97L115.45 17.90L119.64 17.90L119.64 23.01L126.36 23.01L126.36 27.93L119.64 27.93L119.64 39.51Q119.64 40.88 120.42 41.56Q121.21 42.24 122.50 42.24ZM151.28 42.24L151.28 42.24Q152.35 42.24 153.37 42.02Q154.39 41.81 155.40 41.49L155.40 41.49L155.40 46.36Q154.35 46.84 152.79 47.15Q151.23 47.46 149.39 47.46L149.39 47.46Q147.24 47.46 145.53 46.76Q143.82 46.06 142.84 44.33Q141.87 42.60 141.87 39.51L141.87 39.51L141.87 27.93L138.73 27.93L138.73 25.16L142.34 22.97L144.23 17.90L148.42 17.90L148.42 23.01L155.14 23.01L155.14 27.93L148.42 27.93L148.42 39.51Q148.42 40.88 149.20 41.56Q149.99 42.24 151.28 42.24ZM179.78 22.52L179.78 22.52Q184.61 22.52 187.19 24.62Q189.77 26.73 189.77 31.02L189.77 31.02L189.77 47.03L185.19 47.03L183.92 43.76L183.75 43.76Q182.72 45.05 181.65 45.87Q180.57 46.69 179.18 47.07Q177.78 47.46 175.78 47.46L175.78 47.46Q173.65 47.46 171.97 46.64Q170.28 45.83 169.31 44.14Q168.35 42.45 168.35 39.85L168.35 39.85Q168.35 36.03 171.03 34.21Q173.72 32.40 179.09 32.21L179.09 32.21L183.26 32.08L183.26 31.02Q183.26 29.13 182.27 28.25Q181.28 27.37 179.52 27.37L179.52 27.37Q177.78 27.37 176.10 27.87Q174.43 28.36 172.75 29.11L172.75 29.11L170.58 24.69Q172.49 23.68 174.87 23.10Q177.24 22.52 179.78 22.52ZM183.26 37.88L183.26 35.90L180.72 35.99Q177.54 36.07 176.31 37.13Q175.07 38.18 175.07 39.90L175.07 39.90Q175.07 41.40 175.95 42.03Q176.83 42.67 178.25 42.67L178.25 42.67Q180.36 42.67 181.81 41.42Q183.26 40.18 183.26 37.88L183.26 37.88ZM219.47 23.01L219.47 27.93L213.80 27.93L213.80 47.03L207.25 47.03L207.25 27.93L203.64 27.93L203.64 24.77L207.25 23.01L207.25 21.25Q207.25 18.18 208.29 16.47Q209.33 14.76 211.23 14.06Q213.13 13.36 215.73 13.36L215.73 13.36Q217.64 13.36 219.21 13.67Q220.78 13.99 221.77 14.37L221.77 14.37L220.09 19.19Q219.34 18.95 218.46 18.76Q217.58 18.56 216.44 18.56L216.44 18.56Q215.07 18.56 214.43 19.39Q213.80 20.22 213.80 21.51L213.80 21.51L213.80 23.01L219.47 23.01ZM242.81 22.56L242.81 22.56Q246.14 22.56 248.55 23.84Q250.96 25.12 252.27 27.54Q253.58 29.97 253.58 33.47L253.58 33.47L253.58 36.65L238.09 36.65Q238.20 39.42 239.75 41.00Q241.31 42.58 244.08 42.58L244.08 42.58Q246.38 42.58 248.29 42.11Q250.21 41.64 252.22 40.69L252.22 40.69L252.22 45.76Q250.44 46.64 248.50 47.05Q246.55 47.46 243.78 47.46L243.78 47.46Q240.17 47.46 237.39 46.13Q234.61 44.79 233.03 42.07Q231.45 39.34 231.45 35.19L231.45 35.19Q231.45 30.98 232.88 28.18Q234.31 25.37 236.86 23.97Q239.42 22.56 242.81 22.56ZM242.86 27.22L242.86 27.22Q240.95 27.22 239.69 28.45Q238.43 29.67 238.24 32.29L238.24 32.29L247.43 32.29Q247.41 30.83 246.91 29.69Q246.40 28.55 245.40 27.89Q244.40 27.22 242.86 27.22ZM243.59 13.32L250.94 13.32L250.94 13.77Q250.31 14.37 249.30 15.25Q248.29 16.13 247.13 17.09Q245.97 18.05 244.86 18.92Q243.74 19.79 242.90 20.37L242.90 20.37L238.54 20.37L238.54 19.79Q239.25 18.97 240.18 17.84Q241.12 16.71 242.04 15.51Q242.97 14.31 243.59 13.32L243.59 13.32ZM275.14 13.60L275.14 47.03L268.59 47.03L268.59 13.60L275.14 13.60ZM301.53 22.52L301.53 22.52Q306.37 22.52 308.95 24.62Q311.52 26.73 311.52 31.02L311.52 31.02L311.52 47.03L306.95 47.03L305.68 43.76L305.51 43.76Q304.48 45.05 303.40 45.87Q302.33 46.69 300.93 47.07Q299.54 47.46 297.54 47.46L297.54 47.46Q295.41 47.46 293.72 46.64Q292.04 45.83 291.07 44.14Q290.10 42.45 290.10 39.85L290.10 39.85Q290.10 36.03 292.79 34.21Q295.48 32.40 300.85 32.21L300.85 32.21L305.01 32.08L305.01 31.02Q305.01 29.13 304.03 28.25Q303.04 27.37 301.28 27.37L301.28 27.37Q299.54 27.37 297.86 27.87Q296.18 28.36 294.51 29.11L294.51 29.11L292.34 24.69Q294.25 23.68 296.62 23.10Q299.00 22.52 301.53 22.52ZM305.01 37.88L305.01 35.90L302.48 35.99Q299.30 36.07 298.06 37.13Q296.83 38.18 296.83 39.90L296.83 39.90Q296.83 41.40 297.71 42.03Q298.59 42.67 300.01 42.67L300.01 42.67Q302.11 42.67 303.56 41.42Q305.01 40.18 305.01 37.88L305.01 37.88ZM334.98 57.60L334.98 57.60Q329.95 57.60 327.30 55.85Q324.64 54.10 324.64 50.94L324.64 50.94Q324.64 48.77 326.00 47.31Q327.35 45.85 329.97 45.22L329.97 45.22Q328.96 44.79 328.21 43.82Q327.46 42.84 327.46 41.74L327.46 41.74Q327.46 40.37 328.25 39.46Q329.05 38.54 330.55 37.66L330.55 37.66Q328.66 36.85 327.55 35.04Q326.45 33.24 326.45 30.79L326.45 30.79Q326.45 28.17 327.60 26.33Q328.75 24.49 330.95 23.53Q333.15 22.56 336.31 22.56L336.31 22.56Q336.97 22.56 337.85 22.64Q338.74 22.73 339.48 22.84Q340.22 22.95 340.48 23.01L340.48 23.01L348.85 23.01L348.85 26.34L345.09 27.31Q345.61 28.10 345.87 29.00Q346.13 29.91 346.13 30.92L346.13 30.92Q346.13 34.78 343.43 36.94Q340.73 39.10 335.94 39.10L335.94 39.10Q334.80 39.04 333.79 38.93L333.79 38.93Q333.30 39.32 333.04 39.75Q332.78 40.18 332.78 40.65L332.78 40.65Q332.78 41.12 333.18 41.43Q333.58 41.74 334.38 41.91Q335.19 42.07 336.39 42.07L336.39 42.07L340.48 42.07Q344.43 42.07 346.50 43.76Q348.58 45.46 348.58 48.75L348.58 48.75Q348.58 52.96 345.06 55.28Q341.55 57.60 334.98 57.60ZM335.26 53.32L335.26 53.32Q337.60 53.32 339.28 52.88Q340.97 52.44 341.87 51.64Q342.77 50.83 342.77 49.71L342.77 49.71Q342.77 48.81 342.25 48.29Q341.72 47.76 340.66 47.54Q339.59 47.33 337.94 47.33L337.94 47.33L334.55 47.33Q333.34 47.33 332.39 47.72Q331.43 48.10 330.87 48.80Q330.31 49.50 330.31 50.42L330.31 50.42Q330.31 51.78 331.61 52.55Q332.91 53.32 335.26 53.32ZM336.31 35.11L336.31 35.11Q338.16 35.11 339.01 33.97Q339.87 32.83 339.87 30.87L339.87 30.87Q339.87 28.70 338.98 27.62Q338.09 26.53 336.31 26.53L336.31 26.53Q334.50 26.53 333.60 27.62Q332.70 28.70 332.70 30.87L332.70 30.87Q332.70 32.83 333.59 33.97Q334.48 35.11 336.31 35.11Z"></path></g></svg></g>
   </svg>`;
+}
+function renderTopbar(){
+  const logo = brandLogoSvg();
   // Mode-switch (client/staff/admin view toggle) is an admin-only power-user
   // control — gated on session.actualRole (the real authenticated role, not
   // viewMode, which admin can temporarily change to preview other views).
@@ -976,9 +1007,10 @@ function renderDesktopAuth(){
   <div class="ds-auth-wrap">
     <div class="ds-split">
       <div class="ds-split-brand">
+        <div style="position:absolute;top:20px;right:20px;z-index:2;">${renderLangSwitch()}</div>
         <div>
+          <div style="background:#fff;border-radius:10px;padding:10px 16px;display:inline-block;margin-bottom:16px;">${brandLogoSvg(190,57)}</div>
           <div class="ds-eyebrow">${t('welcome_eyebrow')}</div>
-          <h1>Þvottafélagið</h1>
           <p>${t('brand_trust_copy')}</p>
         </div>
         <div class="ds-trust">
@@ -989,7 +1021,7 @@ function renderDesktopAuth(){
       </div>
       <div class="ds-split-form">
         ${m.eyebrow ? `<div class="ds-form-kicker">${m.eyebrow}</div>` : ''}
-        <h2>${m.title}</h2>
+        <h1>${m.title}</h1>
         <p class="ds-form-sub">${m.sub}</p>
         ${authFieldsHtml()}
       </div>
@@ -1241,7 +1273,7 @@ function renderDesktopStaffShell(){
   const content = staffTab==='today' ? renderDesktopToday(todaySummary)
     : staffTab==='orders' ? renderStaffOrders()
     : staffTab==='clients' ? renderStaffClients()
-    : staffTab==='reports' ? renderReports()
+    : staffTab==='reports' ? renderDesktopReports()
     : renderStaffNotifications();
   const locale = lang==='is' ? 'is-IS' : 'en-GB';
   const dateStr = new Date().toLocaleDateString(locale, {weekday:'long', day:'2-digit', month:'long'});
@@ -1387,7 +1419,9 @@ function renderOrderCardStaff(o){
     ${pipelineHtml(o.estado)}
     ${session.role==='admin' ? priceBlockHtml(o) : ''}
     <div class="staff-actions">
-      ${nextEstado ? `<button style="background:var(--ink)" data-advance="${o.id}">${t('advance_to')} ${statusLabel(nextEstado)}</button>` : ``}
+      ${nextEstado ? (nextEstado==='entregado'
+        ? `<button style="background:var(--delivered)" data-advance="${o.id}">${t('mark_delivered')}</button>`
+        : `<button style="background:var(--ink)" data-advance="${o.id}">${t('advance_to')} ${statusLabel(nextEstado)}</button>`) : ``}
       ${!o.problem ? `<button style="background:var(--danger)" data-hold="${o.id}">${t('flag_issue')}</button>` : `<button style="background:var(--teal)" data-resolve="${o.id}">${t('resolve_issue')}</button>`}
     </div>
     <div class="staff-note-input"><input type="text" placeholder="${t('note_ph')}" data-note-input="${o.id}"><button data-note-submit="${o.id}">${t('send')}</button></div>
@@ -1597,15 +1631,14 @@ function computeVolumeReport(startISO, endISO, clientId){
   return { days, activeProductIds, totals, orderCount: orders.length };
 }
 
-/* ---- T7+E5: per-category ISK billing summary for a single contract client
-   over a date range. Reuses computeVolumeReport's date/client filtering
-   approach and adapts computeReports()'s categoryRevenue accumulator
-   (keyed by the same CATEGORIES enum) rather than re-deriving cost
-   aggregation from scratch. "other"-category items with no price yet
-   (computeItemCost===null) are excluded from every total and surfaced via
-   pendingCount instead of being counted as zero. catRows always contains
-   all four CATEGORIES keys (defaulting to 0) so a zero-order range still
-   renders a complete all-zero table rather than an empty one. ----*/
+/* ---- T7+E5: per-product-type ISK billing summary for a single contract
+   client over a date range. Reuses computeVolumeReport's date/client
+   filtering approach. Items with no price yet (computeItemCost===null,
+   i.e. an unpriced "other" entry) are excluded from every total and
+   surfaced via pendingCount instead of being counted as zero. productRows
+   only lists products with a nonzero total for the range (sorted by
+   sortOrder), so a zero-order range yields an empty list rather than an
+   all-zero table. ----*/
 function computeBillingSummary(startISO, endISO, clientId){
   const start = new Date(startISO+'T00:00:00');
   const end = new Date(endISO+'T00:00:00'); end.setDate(end.getDate()+1); // exclusive upper bound
@@ -1614,17 +1647,25 @@ function computeBillingSummary(startISO, endISO, clientId){
     if(clientId && clientId!=='all' && o.userId!==clientId) return false;
     return true;
   });
-  const categoryTotals = {}; let pendingCount = 0;
+  // Grouped by p.key rather than category (desktop-layout-redesign pass).
+  // Safe because every product's key is hard-set to its own id (see
+  // priceEntry()/db.products loader: key:p.id) — if a future products-admin
+  // feature ever lets key diverge from id, two products could collide on
+  // the same bucket here and silently double-count into grandTotal.
+  const productTotals = {}; let pendingCount = 0;
   orders.forEach(o=>{
     o.items.forEach(it=>{
       const p = priceEntry(it.tipo);
       const cost = computeItemCost(it);
       if(cost===null){ pendingCount++; return; }
-      categoryTotals[p.category] = (categoryTotals[p.category]||0) + cost;
+      productTotals[p.key] = (productTotals[p.key]||0) + cost;
     });
   });
-  const catRows = Object.keys(CATEGORIES).map(cat=>({cat, label:CATEGORIES[cat][lang], value: categoryTotals[cat]||0}));
-  const itemsTotal = catRows.reduce((s,r)=>s+r.value,0);
+  const productRows = [...db.products]
+    .filter(p=>productTotals[p.key])
+    .sort((a,b)=>a.sortOrder-b.sortOrder)
+    .map(p=>({key:p.key, label:p[lang]||p.en, value:productTotals[p.key]}));
+  const itemsTotal = productRows.reduce((s,r)=>s+r.value,0);
   const transportes = orders.reduce((s,o)=>s
     + (o.returnMethod==='delivery' ? db.settings.deliveryFee : 0)
     + (o.pickup ? db.settings.pickupFee : 0), 0);
@@ -1635,7 +1676,7 @@ function computeBillingSummary(startISO, endISO, clientId){
   }, 0);
   const discount = db.settings.discountPercent ? Math.round(itemsTotal * (db.settings.discountPercent/100)) : 0;
   const grandTotal = Math.max(0, itemsTotal + transportes + expressFee - discount);
-  return { catRows, transportes, expressFee, discount, grandTotal, pendingCount, orderCount: orders.length };
+  return { productRows, transportes, expressFee, discount, grandTotal, pendingCount, orderCount: orders.length };
 }
 
 function renderBillingSummary(){
@@ -1644,7 +1685,7 @@ function renderBillingSummary(){
     <div class="chart-card billing-summary">
       <h3>${t('billing_summary')}</h3><p class="chart-sub">${t('billing_summary_sub')}</p>
       <div class="price-block">
-        ${b.catRows.map(r=>`<div class="price-line"><span>${r.label}</span><span class="amount">${fmtISK(r.value)}</span></div>`).join('')}
+        ${b.productRows.map(r=>`<div class="price-line"><span>${r.label}</span><span class="amount">${fmtISK(r.value)}</span></div>`).join('')}
         <div class="price-line"><span>${t('billing_transportes')}</span><span class="amount">${fmtISK(b.transportes)}</span></div>
         ${b.expressFee>0 ? `<div class="price-line"><span>${t('express_fee')}</span><span class="amount">${fmtISK(b.expressFee)}</span></div>` : ''}
         ${b.discount>0 ? `<div class="price-line"><span>${t('discount')}</span><span class="amount">-${fmtISK(b.discount)}</span></div>` : ''}
@@ -1763,8 +1804,96 @@ function renderReports(){
   `;
 }
 
+// Bespoke desktop dashboard (T6) — shared by staff & admin desktop shells.
+// Reuses computeReports()/computeVolumeReport() as pure data sources but
+// renders its own bento-grid markup rather than the mobile chart-card stack.
+function renderDesktopReports(){
+  const r = computeReports();
+  const showMoney = session.role === 'admin';
+  const alerts = [
+    ...r.overdueList.map(o=>({o, key:'alert_overdue'})),
+    ...r.urgentList.map(o=>({o, key:'alert_urgent'})),
+    ...r.problemList.map(o=>({o, key:'alert_problem'})),
+    ...r.waitingList.map(o=>({o, key:'alert_waiting'}))
+  ];
+  const hero = [];
+  if(showMoney){
+    hero.push({v:fmtISK(r.salesToday), l:t('rep_today')}, {v:fmtISK(r.salesWeek), l:t('rep_week')}, {v:fmtISK(r.salesMonth), l:t('rep_month')}, {v:fmtISK(r.salesYear), l:t('rep_year')});
+  }
+  hero.push({v:r.totalOrders, l:t('rep_total_orders')}, {v:r.avgPerDay, l:t('rep_avg_day')}, {v:r.avgPerWeek, l:t('rep_avg_week')});
+  if(showMoney) hero.push({v:fmtISK(r.avgTicket), l:t('rep_avg_ticket')});
+  if(r.avgTurnaroundHrs) hero.push({v:`${r.avgTurnaroundHrs} ${t('hrs')}`, l:t('rep_avg_turnaround')});
+  return `
+    <div class="dash-hero">${hero.map(c=>`<div class="dash-hero-cell"><div class="v">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>
+    <div class="dash-grid">
+      <div class="dash-card span-2"><h3>Orders — last 14 days</h3><p class="sub"></p>${svgVolumeLine(r.days)}</div>
+      <div class="dash-card"><h3>${t('rep_production')}</h3><p class="sub">${t('rep_production_sub')}</p>${svgHBar(r.statusRows)}</div>
+
+      <div class="dash-card"><h3>${t('rep_top_services')}</h3><p class="sub">${t('rep_top_services_sub')}</p>${r.topServices.length?svgHBar(r.topServices):`<p class="sub">—</p>`}</div>
+      ${r.topClients.length ? `<div class="dash-card"><h3>${t('rep_frequent')}</h3><p class="sub"></p>${svgHBar(r.topClients.map(c=>({label:c.name,value:c.count,color:'#C2703D'})))}</div>` : ''}
+      <div class="dash-card"><h3>${t('rep_peak_hours')}</h3><p class="sub">${t('rep_peak_hours_sub')}</p>${svgHBar(r.peakRows,{color:'#6B5B95'})}</div>
+
+      ${showMoney ? `
+      <div class="dash-card"><h3>${t('rep_revenue_client')}</h3><p class="sub">${t('rep_revenue_client_sub')}</p>${r.revenueByClient.length?svgHBar(r.revenueByClient,{fmt:fmtISK,color:'#4E8B5C'}):`<p class="sub">—</p>`}</div>
+      <div class="dash-card"><h3>${t('rep_revenue_cat')}</h3><p class="sub">${t('rep_revenue_cat_sub')}</p>${r.catRows.length?svgHBar(r.catRows,{fmt:fmtISK,color:'#3E6FBF'}):`<p class="sub">—</p>`}</div>
+      ` : ''}
+
+      <div class="dash-card"><h3>${t('rep_customers')}</h3><p class="sub"></p>
+        <div class="price-line"><span class="name">${t('rep_new')}</span><span class="qty">${r.newClients}</span></div>
+        <div class="price-line"><span class="name">${t('rep_recurring')}</span><span class="qty">${r.recurringClients}</span></div>
+        <div class="price-line"><span class="name">${t('rep_lost')}</span><span class="qty">${r.lostClients}</span></div>
+      </div>
+    </div>
+    <div class="dash-card">
+      <h3>${t('rep_alerts')}</h3>
+      ${alerts.length===0 ? `<div class="empty-state" style="padding:20px 10px;"><div class="glyph">✅</div><p>${t('rep_no_alerts')}</p></div>` :
+        alerts.map(a=>`<div class="alert-list-item ${a.key==='alert_urgent'?'warn':''}"><b>${a.o.id}</b> · ${orderClientName(a.o)} — ${t(a.key)}</div>`).join('')}
+    </div>
+  `;
+}
+
+function renderDesktopVolumeReport(){
+  const contractClients = db.users.filter(u=>u.isContract);
+  const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
+  const productLabel = (id)=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${t('unit_'+p.unit)})` : id; };
+  return `
+    <div class="dash-card span-3">
+      <h3>${t('rep_volume')}</h3><p class="sub">${t('rep_volume_sub')}</p>
+      <div class="form-row2">
+        <div class="field"><label>${t('rep_volume_start')}</label><input type="date" id="vol-start" value="${volumeStart}" max="${volumeEnd}"></div>
+        <div class="field"><label>${t('rep_volume_end')}</label><input type="date" id="vol-end" value="${volumeEnd}" min="${volumeStart}" max="${todayISO()}"></div>
+      </div>
+      <div class="field">
+        <label>${t('rep_volume_client')}</label>
+        <select id="vol-client">
+          <option value="all" ${volumeClientFilter==='all'?'selected':''}>${t('rep_volume_all_clients')}</option>
+          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${c.name}</option>`).join('')}
+        </select>
+      </div>
+      ${r.activeProductIds.length===0 ? `<p class="sub">${t('rep_no_data')}</p>` : `
+      <div class="table-scroll">
+        <table class="volume-table">
+          <thead><tr><th>${t('rep_volume_day')}</th>${r.activeProductIds.map(id=>`<th>${productLabel(id)}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${r.days.map(day=>`<tr><td>${fmtFecha(day.date)}</td>${r.activeProductIds.map(id=>`<td>${day.values[id]?fmtQty(day.values[id], (db.products.find(p=>p.id===id)||{}).unit):'—'}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr><td><b>${t('rep_volume_total')}</b></td>${r.activeProductIds.map(id=>`<td><b>${fmtQty(r.totals[id], (db.products.find(p=>p.id===id)||{}).unit)}</b></td>`).join('')}</tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
+      `}
+    </div>
+    ${volumeClientFilter!=='all' ? renderBillingSummary() : ''}
+  `;
+}
+
 /* ============ ADMIN ============ */
-function renderAdminView(){
+// Shared by renderAdminView() (mobile) and renderDesktopAdminShell() (desktop)
+// so the tab list and badge-count logic (pending quotes, failed emails) live
+// in exactly one place.
+function computeAdminTabMeta(){
   const tabs = ['reports','volume','quotes','products','pricing','orders','clients','failed'];
   const pendingQuoteCount = db.orders.reduce((s,o)=>s+o.items.filter(it=>it.tipo==='other' && it.priceOverride==null).length,0);
   const failedEmailCount = db.emailLog.filter(e=>e.status==='failed').length;
@@ -1773,6 +1902,10 @@ function renderAdminView(){
     products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab'),
     failed:t('tab_failed_emails')+(failedEmailCount?` (${failedEmailCount})`:'')
   };
+  return { tabs, tabLabels, pendingQuoteCount, failedEmailCount };
+}
+function renderAdminView(){
+  const { tabs, tabLabels } = computeAdminTabMeta();
   return `
   <div class="content">
     <div class="section-title">${t('admin_panel')}</div>
@@ -1789,6 +1922,44 @@ function renderAdminView(){
   <div class="bottomnav">
     <button class="active"><span class="ic">🛠️</span>${t('admin_panel')}</button>
     <button id="btn-logout"><span class="ic">↩</span>${t('logout')}</button>
+  </div>`;
+}
+
+// Desktop admin console (T3 fast-follow): unlike renderDesktopStaffShell(),
+// EVERY admin tab gets the sidebar/topbar shell — admin's 8-tab set has no
+// "Today" tab to special-case, so there's no partial rollout here. Content
+// still comes from the same render*() functions the mobile view uses (so
+// event-handler wiring in bindEvents() never has to know which viewport
+// rendered them); desktop-specific presentation comes from the ds-content
+// grid CSS, not from forking the render functions themselves.
+function renderDesktopAdminShell(){
+  const { tabs, tabLabels } = computeAdminTabMeta();
+  const tabIcons = {reports:'📊', volume:'📦', quotes:'💬', products:'🧾', pricing:'💰', orders:'🧺', clients:'👥', failed:'⚠️'};
+  const content = adminTab==='reports' ? `<div class="admin-banner">${t('admin_intro')}</div>${renderDesktopReports()}`
+    : adminTab==='volume' ? renderDesktopVolumeReport()
+    : adminTab==='quotes' ? renderAdminQuotes()
+    : adminTab==='products' ? renderAdminProducts()
+    : adminTab==='pricing' ? renderAdminPricing()
+    : adminTab==='orders' ? renderStaffOrders()
+    : adminTab==='failed' ? renderAdminFailedEmails()
+    : renderStaffClients();
+  const cardTabs = ['orders','clients','quotes','failed'];
+  const formTabs = ['products','pricing'];
+  const wrapClass = cardTabs.includes(adminTab) ? 'ds-content-cards' : formTabs.includes(adminTab) ? 'ds-content-form' : '';
+  return `
+  <div class="ds-shell">
+    <aside class="ds-sidebar">
+      <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('admin_panel')}</span></div>
+      <nav class="ds-nav">${tabs.map(tb=>`<button data-admintab="${tb}" class="${adminTab===tb?'active':''}">${tabIcons[tb]} ${tabLabels[tb]}</button>`).join('')}</nav>
+      <div class="ds-sidebar-foot">${t('signed_in_as')} ${t('tab_admin')}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
+    </aside>
+    <main class="ds-main">
+      <div class="ds-topbar">
+        <div><h1>${tabLabels[adminTab]}</h1></div>
+        ${renderLangSwitch()}
+      </div>
+      <div class="ds-content ${wrapClass}">${content}</div>
+    </main>
   </div>`;
 }
 
@@ -1833,7 +2004,6 @@ function productEditFormHtml(p){
 function renderAdminProducts(){
   const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
   return `
-    <div class="admin-banner">${t('admin_intro')}</div>
     ${!addingProduct ? `<button class="add-item" id="btn-add-product">${t('add_product')}</button>` : productEditFormHtml(null)}
     ${products.map((p,i)=>{
       if(editingProductId===p.id) return productEditFormHtml(p);
