@@ -472,6 +472,11 @@ const I18N = {
     walkin_client_ph:"E.g. Hotel Húsavík — Reception", err_manual_client:"Select a client or type a name",
     manual_order_logged:"Order logged",
 
+    edit_order:"✎ Edit order", edit_order_title:"Edit order",
+    edit_order_sub:"Update items, quantities, prices, or delivery details for this order.",
+    save_order_changes:"Save changes", order_edited:"Order updated",
+    item_price_override_label:"Price override (ISK)", item_price_override_ph:"Leave blank for catalog price",
+
     rep_revenue_client:"Revenue by client", rep_revenue_client_sub:"Useful to reconcile against contract paperwork",
 
     register_client:"+ Register client", register_client_title:"Register a new client", client_phone_ph:"555-0199",
@@ -616,6 +621,11 @@ const I18N = {
     walkin_client_ph:"T.d. Hótel Húsavík — Móttaka", err_manual_client:"Veldu viðskiptavin eða skrifaðu nafn",
     manual_order_logged:"Pöntun skráð",
 
+    edit_order:"✎ Breyta pöntun", edit_order_title:"Breyta pöntun",
+    edit_order_sub:"Uppfærðu vörur, magn, verð eða afhendingarupplýsingar fyrir þessa pöntun.",
+    save_order_changes:"Vista breytingar", order_edited:"Pöntun uppfærð",
+    item_price_override_label:"Sérverð (kr.)", item_price_override_ph:"Skildu eftir autt fyrir listaverð",
+
     rep_revenue_client:"Tekjur eftir viðskiptavini", rep_revenue_client_sub:"Gagnlegt til að stemma af á móti pappírsskráningu",
 
     register_client:"+ Skrá viðskiptavin", register_client_title:"Skrá nýjan viðskiptavin", client_phone_ph:"555-0199",
@@ -684,12 +694,13 @@ desktopMql.addEventListener('change', ()=>{
 function priceEntry(key){ return db.products.find(p=>p.key===key) || db.products.find(p=>p.key==='other'); }
 // Staff-only products (e.g. "Gull"/kilos amarillos) are hidden from the
 // client-facing self-service order sheet (sheetMode==='client') but remain
-// selectable in the staff/admin manual-order sheet (sheetMode==='manual').
+// selectable in the staff/admin manual-order sheet (sheetMode==='manual') and
+// the admin-only order-edit sheet (sheetMode==='edit').
 // This is a client-side convenience filter only — the real enforcement is
 // the order_items_insert_client RLS policy (staff_only_products migration),
 // which rejects a client-originated insert referencing a staff-only product
 // regardless of what the UI shows.
-function activeProducts(){ return [...db.products].filter(p=>p.active && (!p.staffOnly || sheetMode==='manual')).sort((a,b)=>a.sortOrder-b.sortOrder); }
+function activeProducts(){ return [...db.products].filter(p=>p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit')).sort((a,b)=>a.sortOrder-b.sortOrder); }
 function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }
 
 function computeItemCost(it){
@@ -818,7 +829,7 @@ let staffClientFilter = 'todos';
 let staffQuickFilter = null;
 let authScreen = 'login';
 let sheetOpen = false;
-let sheetMode = 'client'; // 'client' | 'manual'
+let sheetMode = 'client'; // 'client' | 'manual' | 'edit'
 let orderDraftItems = [];
 let orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
 let orderDraftManualClientId = '';
@@ -827,8 +838,20 @@ let orderDraftManualName = '';
 // Manual/staff mode: defaults to today (most walk-ins are same-day), staff
 // can push it later or backdate it (e.g. logging a walk-in retroactively) —
 // no min restriction, since staff is setting the order's due date, not a
-// client making a request.
+// client making a request. Edit mode behaves like manual mode here too.
 let orderDraftFecha = '';
+// Bound to the sheet's comments textarea across all modes so a full render()
+// triggered by an unrelated field (e.g. changing an item's qty) doesn't wipe
+// out an in-progress edit — see the data-item-desc/data-item-price fields
+// below for the same no-render-on-input pattern.
+let orderDraftComentarios = '';
+// Admin-only edit mode (issue #3): id of the order currently being edited via
+// the sheet, mirrors the editingClientId pattern below. orderEditOriginalItems
+// is a snapshot of that order's items *as loaded*, kept separate from
+// orderDraftItems (which the form mutates) so the save handler can diff the
+// two to decide which order_items rows to insert/update/delete.
+let editingOrderId = null;
+let orderEditOriginalItems = [];
 let editingProductId = null;
 let addingProduct = false;
 let addingClient = false;
@@ -1177,13 +1200,22 @@ function renderSheet(){
   if(orderDraftItems.length===0) orderDraftItems=[{tipo:activeProducts()[0].key, cant:1, desc:''}];
   const totals = computeOrderTotals(orderDraftItems, orderDraftMods);
   const isManual = sheetMode==='manual';
+  // Edit mode (issue #3, admin-only): reuses the manual-mode item/urgent/
+  // return-method/pickup markup as-is, per the issue's implementation notes,
+  // plus a per-item editable price field since admin already sees prices
+  // elsewhere in this view. isManualLike drives the bits of markup edit mode
+  // shares with manual mode (no min-date restriction, staff-only products
+  // selectable) without lumping it in with isManual's client-picker block.
+  const isEdit = sheetMode==='edit';
+  const isManualLike = isManual || isEdit;
   const hidePrices = session.role==='staff';
+  const editingOrder = isEdit ? db.orders.find(o=>o.id===editingOrderId) : null;
   return `
   <div class="sheet-backdrop ${sheetOpen?'open':''}" id="sheet-backdrop"></div>
   <div class="sheet ${sheetOpen?'open':''}" id="sheet">
     <div class="sheet-handle"></div>
-    <h2>${isManual ? t('manual_order_title') : t('new_order_title')}</h2>
-    <p class="sub">${isManual ? t('manual_order_sub') : t('new_order_sub')}</p>
+    <h2>${isEdit ? t('edit_order_title') : (isManual ? t('manual_order_title') : t('new_order_title'))}</h2>
+    <p class="sub">${isEdit ? t('edit_order_sub') : (isManual ? t('manual_order_sub') : t('new_order_sub'))}</p>
 
     ${isManual ? `
     <div class="field"><label>${t('select_existing_client')}</label>
@@ -1194,11 +1226,19 @@ function renderSheet(){
     </div>
     <div class="field"><label>${t('or_type_name')}</label><input id="manual-client-name" value="${orderDraftManualName}" placeholder="${t('walkin_client_ph')}"></div>
     ` : ''}
+    ${isEdit && editingOrder ? `
+    <div class="field"><label>${t('client_label')}</label><div class="item-price-hint">${editingOrder.id} · ${orderClientName(editingOrder)}</div></div>
+    ` : ''}
 
     <label>${t('items_services')}</label>
     ${orderDraftItems.map((it,i)=>{
       const p = priceEntry(it.tipo);
       const hint = hidePrices ? '' : (it.tipo==='other' ? `<div class="item-price-hint pending">${t('quote_pending_item')}</div>` : `<div class="item-price-hint">${fmtISK(p.price)} / ${p.unit} → ${fmtISK(p.price*it.cant)}</div>`);
+      // Edit mode only: lets admin override an individual item's price
+      // (blank = fall back to the catalog price / stay unpriced for "other").
+      // Mirrors the price_override column order_items already has and the
+      // assign_price quoting flow admin uses elsewhere in this view.
+      const priceField = isEdit ? `<div class="field"><label>${t('item_price_override_label')}</label><input type="number" min="0" class="qty-input" data-item-price="${i}" placeholder="${t('item_price_override_ph')}" value="${it.priceOverride!=null?it.priceOverride:''}"></div>` : '';
       return `
       <div class="item-row">
         <select data-item-tipo="${i}">${activeProducts().map(s=>`<option value="${s.key}" ${s.key===it.tipo?'selected':''}>${s[lang]||s.en}</option>`).join('')}</select>
@@ -1206,7 +1246,7 @@ function renderSheet(){
         ${it.tipo!=='other' ? `<span class="qty-unit">${t('unit_abbr_'+p.unit)}</span>` : ''}
         ${it.tipo==='other' ? `<input type="text" class="other-input" data-item-desc="${i}" value="${it.desc||''}" placeholder="${t('other_ph')}">` : ''}
         ${orderDraftItems.length>1 ? `<button data-remove-item="${i}">✕</button>`:''}
-      </div>${hint}`;
+      </div>${hint}${priceField}`;
     }).join('')}
     <button class="add-item" id="add-item-btn">${t('add_item')}</button>
 
@@ -1234,9 +1274,9 @@ function renderSheet(){
       ${totals.hasPending ? `<div class="note">${t('quote_pending_note')}</div>` : ''}
     </div>`}
 
-    <div class="field"><label>${isManual ? t('req_date_manual') : t('req_date')}</label><input type="date" id="orden-fecha" value="${orderDraftFecha}" ${isManual ? '' : `min="${todayISO()}"`}></div>
-    <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}"></textarea></div>
-    <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${t('submit_order')}</button>
+    <div class="field"><label>${isManualLike ? t('req_date_manual') : t('req_date')}</label><input type="date" id="orden-fecha" value="${orderDraftFecha}" ${isManualLike ? '' : `min="${todayISO()}"`}></div>
+    <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}">${orderDraftComentarios||''}</textarea></div>
+    <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${isEdit ? t('save_order_changes') : t('submit_order')}</button>
     <button class="btn btn-ghost" id="btn-cancel-orden" style="width:100%;">${t('cancel')}</button>
   </div>`;
 }
@@ -1419,6 +1459,7 @@ function renderOrderCardStaff(o){
     ${pipelineHtml(o.estado)}
     ${session.role==='admin' ? priceBlockHtml(o) : ''}
     <div class="staff-actions">
+      ${session.role==='admin' ? `<button style="background:var(--teal-dark)" data-edit-order="${o.id}">${t('edit_order')}</button>` : ''}
       ${nextEstado ? (nextEstado==='entregado'
         ? `<button style="background:var(--delivered)" data-advance="${o.id}">${t('mark_delivered')}</button>`
         : `<button style="background:var(--ink)" data-advance="${o.id}">${t('advance_to')} ${statusLabel(nextEstado)}</button>`) : ``}
@@ -2180,6 +2221,8 @@ function bindEvents(){
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     orderDraftFecha = '';
+    orderDraftComentarios = '';
+    editingOrderId = null; orderEditOriginalItems = [];
     sheetOpen = true; render();
   };
   const btnLogOrder = document.getElementById('btn-log-order');
@@ -2189,10 +2232,30 @@ function bindEvents(){
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     orderDraftManualClientId = ''; orderDraftManualName = '';
     orderDraftFecha = todayISO();
+    orderDraftComentarios = '';
+    editingOrderId = null; orderEditOriginalItems = [];
     sheetOpen = true; render();
   };
-  const btnCancel = document.getElementById('btn-cancel-orden'); if(btnCancel) btnCancel.onclick=()=>{ sheetOpen=false; render(); };
-  const backdrop = document.getElementById('sheet-backdrop'); if(backdrop) backdrop.onclick=()=>{ sheetOpen=false; render(); };
+  // Admin-only "Edit order" entry point (issue #3). Pre-fills the same draft
+  // state the manual/client sheet already uses, plus a snapshot of the
+  // order's current items (orderEditOriginalItems) the save handler diffs
+  // against later. Reassigning the order to a different client is out of
+  // scope, so orderDraftManualClientId/Name are deliberately left untouched.
+  app.querySelectorAll('[data-edit-order]').forEach(b=>b.onclick=()=>{
+    if(session.role!=='admin') return;
+    const o = db.orders.find(x=>x.id===b.dataset.editOrder);
+    if(!o) return;
+    sheetMode = 'edit';
+    editingOrderId = o.id;
+    orderEditOriginalItems = o.items.map(it=>({ id:it.id, tipo:it.tipo, cant:it.cant, desc:it.desc||'', priceOverride: it.priceOverride==null?null:it.priceOverride }));
+    orderDraftItems = orderEditOriginalItems.map(it=>({...it}));
+    orderDraftMods = {urgent:o.urgent, returnMethod:o.returnMethod||'store', pickup:o.pickup, pickupAddress:o.pickupAddress||''};
+    orderDraftFecha = o.fecha||'';
+    orderDraftComentarios = o.comentarios||'';
+    sheetOpen = true; render();
+  });
+  const btnCancel = document.getElementById('btn-cancel-orden'); if(btnCancel) btnCancel.onclick=()=>{ sheetOpen=false; editingOrderId=null; orderEditOriginalItems=[]; render(); };
+  const backdrop = document.getElementById('sheet-backdrop'); if(backdrop) backdrop.onclick=()=>{ sheetOpen=false; editingOrderId=null; orderEditOriginalItems=[]; render(); };
 
   const manualClientSelect = document.getElementById('manual-client-select');
   if(manualClientSelect) manualClientSelect.onchange = ()=>{ orderDraftManualClientId = manualClientSelect.value; };
@@ -2200,6 +2263,8 @@ function bindEvents(){
   if(manualClientName) manualClientName.oninput = ()=>{ orderDraftManualName = manualClientName.value; };
   const ordenFecha = document.getElementById('orden-fecha');
   if(ordenFecha) ordenFecha.oninput = ()=>{ orderDraftFecha = ordenFecha.value; };
+  const ordenComentarios = document.getElementById('orden-comentarios');
+  if(ordenComentarios) ordenComentarios.oninput = ()=>{ orderDraftComentarios = ordenComentarios.value; };
   app.querySelectorAll('input[name="return-method"]').forEach(el=>el.onchange=()=>{ orderDraftMods.returnMethod = el.value; render(); });
 
   const addItemBtn = document.getElementById('add-item-btn');
@@ -2208,6 +2273,7 @@ function bindEvents(){
   app.querySelectorAll('[data-item-tipo]').forEach(el=>el.onchange=()=>{ orderDraftItems[parseInt(el.dataset.itemTipo)].tipo = el.value; render(); });
   app.querySelectorAll('[data-item-cant]').forEach(el=>el.onchange=()=>{ orderDraftItems[parseInt(el.dataset.itemCant)].cant = Math.max(1, parseInt(el.value)||1); render(); });
   app.querySelectorAll('[data-item-desc]').forEach(el=>el.oninput=()=>{ orderDraftItems[parseInt(el.dataset.itemDesc)].desc = el.value; });
+  app.querySelectorAll('[data-item-price]').forEach(el=>el.oninput=()=>{ const v=el.value.trim(); orderDraftItems[parseInt(el.dataset.itemPrice)].priceOverride = v==='' ? null : Number(v); });
 
   const ou = document.getElementById('orden-urgent'); if(ou) ou.onchange=()=>{ orderDraftMods.urgent=ou.checked; render(); };
   const op = document.getElementById('orden-pickup'); if(op) op.onchange=()=>{ orderDraftMods.pickup=op.checked; render(); };
@@ -2245,6 +2311,50 @@ function bindEvents(){
         });
         if(error) throw error;
         toast(t('manual_order_logged'));
+      } else if(sheetMode==='edit'){
+        // Admin-only order edit (issue #3): no RPC — direct table writes,
+        // permitted by the existing orders_update_admin / order_items_*_admin
+        // RLS policies. estado/problem/notas are intentionally left untouched
+        // (this form never shows them), so no status-change notification
+        // fires. Diffs orderDraftItems against the orderEditOriginalItems
+        // snapshot captured when the sheet was opened to decide which
+        // order_items rows to update/insert/delete.
+        if(session.role!=='admin' || !editingOrderId){ toast(t('err_generic')); return; }
+
+        const { error: orderUpdErr } = await sb.from('orders').update({
+          fecha, comentarios: comentarios || null, urgent: orderDraftMods.urgent,
+          return_method: orderDraftMods.returnMethod, pickup: orderDraftMods.pickup,
+          pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null
+        }).eq('id', editingOrderId);
+        if(orderUpdErr) throw orderUpdErr;
+
+        const currentIds = new Set(orderDraftItems.filter(it=>it.id).map(it=>it.id));
+        const toDelete = orderEditOriginalItems.filter(it=>!currentIds.has(it.id)).map(it=>it.id);
+        const toInsert = orderDraftItems.filter(it=>!it.id);
+        const toUpdate = orderDraftItems.filter(it=>{
+          if(!it.id) return false;
+          const orig = orderEditOriginalItems.find(o2=>o2.id===it.id);
+          if(!orig) return false;
+          return orig.tipo!==it.tipo || orig.cant!==it.cant || (orig.desc||'')!==(it.desc||'') || (orig.priceOverride??null)!==(it.priceOverride??null);
+        });
+
+        if(toDelete.length){
+          const { error: delErr } = await sb.from('order_items').delete().in('id', toDelete);
+          if(delErr) throw delErr;
+        }
+        for(const it of toUpdate){
+          const { error: updErr } = await sb.from('order_items').update({
+            product_id: it.tipo, qty: it.cant, desc: it.desc || null, price_override: it.priceOverride??null
+          }).eq('id', it.id);
+          if(updErr) throw updErr;
+        }
+        if(toInsert.length){
+          const { error: insErr } = await sb.from('order_items').insert(
+            toInsert.map(it=>({ order_id: editingOrderId, product_id: it.tipo, qty: it.cant, desc: it.desc || null, price_override: it.priceOverride??null }))
+          );
+          if(insErr) throw insErr;
+        }
+        toast(t('order_edited'));
       } else {
         const { data: orderRow, error: orderErr } = await sb.from('orders').insert({
           client_id: session.userId, client_name: null, fecha, comentarios: comentarios || null,
@@ -2261,7 +2371,7 @@ function bindEvents(){
         toast(t('order_sent'));
       }
       await loadOrders();
-      sheetOpen = false; render();
+      sheetOpen = false; editingOrderId = null; orderEditOriginalItems = []; render();
     } catch(e){ console.error('submit order', e); toast(t('err_generic')); }
   };
 
