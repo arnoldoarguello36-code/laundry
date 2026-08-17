@@ -495,6 +495,8 @@ const I18N = {
     no_contract_activity:"No contract client activity today", items_processed:"garments",
 
     client_setup_email_note:"The client will receive an email to set their password.",
+    cf_skip_email_label:"No email for this client",
+    cf_skip_email_note:"No confirmation or password-set email will be sent. Email becomes optional — leave it blank if the client has none, or fill it in just for your records. Order notifications are also turned off for this client (nothing to send them to).",
     password_reset_sent:"Password reset email sent.",
     forgot_password:"Forgot password?", forgot_password_title:"Reset your password",
     forgot_password_sub:"Enter your email and we'll send you a reset link.",
@@ -645,6 +647,8 @@ const I18N = {
     no_contract_activity:"Engin virkni samningsviðskiptavina í dag", items_processed:"flíkur",
 
     client_setup_email_note:"Viðskiptavinurinn fær tölvupóst til að stilla lykilorð.",
+    cf_skip_email_label:"Ekkert netfang fyrir þennan viðskiptavin",
+    cf_skip_email_note:"Enginn staðfestingar- eða lykilorðspóstur verður sendur. Netfang verður valfrjálst — skildu það eftir autt ef viðskiptavinurinn er ekki með netfang, eða fylltu það út bara til að hafa á skrá. Pöntunartilkynningar eru einnig slökktar fyrir þennan viðskiptavin (ekkert netfang til að senda á).",
     password_reset_sent:"Tölvupóstur til að endurstilla lykilorð sendur.",
     forgot_password:"Gleymt lykilorð?", forgot_password_title:"Endurstilla lykilorð",
     forgot_password_sub:"Sláðu inn netfangið þitt og við sendum þér tengil.",
@@ -1497,7 +1501,9 @@ function clientAddFormHtml(){
     </div>
     <div class="field"><label>${t('phone')}</label><input id="cf-phone" type="tel" placeholder="${t('client_phone_ph')}"></div>
     <div class="field"><label>${t('reg_address_label')}</label><input id="cf-address" placeholder="${t('reg_address_ph')}"></div>
-    <div class="item-price-hint" style="margin-bottom:10px;">${t('client_setup_email_note')}</div>
+    <div class="item-price-hint" id="cf-email-note" style="margin-bottom:10px;">${t('client_setup_email_note')}</div>
+    <label class="checkbox-row"><input type="checkbox" id="cf-skip-email"> ${t('cf_skip_email_label')}</label>
+    <div class="item-price-hint" id="cf-skip-email-note" style="margin-bottom:10px;display:none;">${t('cf_skip_email_note')}</div>
     ${session.role==='admin' ? `<label class="checkbox-row"><input type="checkbox" id="cf-contract"> ${t('contract_client')}</label>` : ''}
     <div class="staff-actions">
       <button style="background:var(--teal)" id="cf-save">${t('save')}</button>
@@ -2432,6 +2438,12 @@ function bindEvents(){
   const btnAddClient = document.getElementById('btn-add-client');
   if(btnAddClient) btnAddClient.onclick = ()=>{ addingClient = true; editingClientId=null; render(); };
   const cfCancel = document.getElementById('cf-cancel'); if(cfCancel) cfCancel.onclick = ()=>{ addingClient=false; render(); };
+  const cfSkipEmail = document.getElementById('cf-skip-email');
+  if(cfSkipEmail) cfSkipEmail.onchange = ()=>{
+    const on = cfSkipEmail.checked;
+    const note = document.getElementById('cf-email-note'); if(note) note.style.display = on ? 'none' : '';
+    const skipNote = document.getElementById('cf-skip-email-note'); if(skipNote) skipNote.style.display = on ? '' : 'none';
+  };
   const cfSave = document.getElementById('cf-save');
   if(cfSave) cfSave.onclick = async ()=>{
     const name = document.getElementById('cf-name').value.trim();
@@ -2439,7 +2451,26 @@ function bindEvents(){
     const phone = document.getElementById('cf-phone').value.trim();
     const address = document.getElementById('cf-address').value.trim();
     const contractEl = document.getElementById('cf-contract');
-    if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
+    const skipEmail = cfSkipEmail && cfSkipEmail.checked;
+    // Email is only mandatory on the normal (emailed) path — the no-email
+    // path (admin-create-client) accepts a blank email on purpose.
+    if(!name || !phone || (!skipEmail && !email)){ toast(t('err_fill_all')); return; }
+    if(skipEmail){
+      // No-email path: routed through the admin-create-client Edge Function
+      // (service-role, forwards this staff/admin session's JWT for its own
+      // server-side role check) so neither the signup-confirmation nor the
+      // set-password email fires — see that function's header comment.
+      try{
+        const { data, error } = await sb.functions.invoke('admin-create-client', {
+          body: { name, phone, email: email || undefined, address: address || undefined, is_contract: !!(contractEl && contractEl.checked) }
+        });
+        if(error){ console.error('admin-create-client', error); toast(t('err_generic')); return; }
+        if(data && data.error){ toast(/already|exists|registered/i.test(data.error) ? t('err_email_exists') : t('err_generic')); return; }
+        addingClient=false; toast(t('client_registered'));
+        await loadUsers(); render();
+      } catch(e){ console.error('register client (no-email)', e); toast(t('err_generic')); }
+      return;
+    }
     try{
       // Throwaway random password: the client never uses it — resetPasswordForEmail
       // below sends them a link to set their own. sbAnon keeps this signUp from
