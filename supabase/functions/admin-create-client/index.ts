@@ -50,14 +50,27 @@ type Payload = {
   is_contract?: boolean;
 };
 
+// Front end calls this function directly from the browser (sb.functions.invoke),
+// so it needs CORS headers on every response, including the preflight OPTIONS
+// request the browser sends before the real POST.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function jsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   });
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   if (req.method !== "POST") {
     return jsonResponse({ error: "method not allowed" }, 405);
   }
