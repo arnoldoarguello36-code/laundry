@@ -432,6 +432,9 @@ const I18N = {
     add_product:"+ Add product", product_name_en:"Name (English)", product_name_is:"Name (Icelandic)",
     product_price:"Price (ISK)", product_unit:"Unit", product_category:"Category", product_active:"Available to clients",
     product_staff_only:"Staff only (hidden from client order form)",
+    product_owner_client:"Exclusive to customer", product_owner_global:"All customers (shared catalog)",
+    product_owner_tag_prefix:"Exclusive:", product_owner_filter_label:"Show", product_owner_filter_all:"All products",
+    product_owner_filter_shared:"Shared catalog only",
     client_unknown:"Client",
     unit_pc:"per piece", unit_kg:"per kg", unit_set:"per set",
     unit_abbr_pc:"pcs", unit_abbr_kg:"kg", unit_abbr_set:"set",
@@ -584,6 +587,9 @@ const I18N = {
     add_product:"+ Bæta við vöru", product_name_en:"Nafn (enska)", product_name_is:"Nafn (íslenska)",
     product_price:"Verð (ISK)", product_unit:"Eining", product_category:"Flokkur", product_active:"Sýnilegt viðskiptavinum",
     product_staff_only:"Aðeins starfsfólk (falið í pöntunarformi viðskiptavina)",
+    product_owner_client:"Aðeins fyrir viðskiptavin", product_owner_global:"Alla viðskiptavini (sameiginlegur listi)",
+    product_owner_tag_prefix:"Aðeins fyrir:", product_owner_filter_label:"Sýna", product_owner_filter_all:"Allar vörur",
+    product_owner_filter_shared:"Aðeins sameiginlegan lista",
     client_unknown:"Viðskiptavinur",
     unit_pc:"per stykki", unit_kg:"per kg", unit_set:"per sett",
     unit_abbr_pc:"stk", unit_abbr_kg:"kg", unit_abbr_set:"sett",
@@ -698,15 +704,41 @@ desktopMql.addEventListener('change', ()=>{
 });
 
 function priceEntry(key){ return db.products.find(p=>p.key===key) || db.products.find(p=>p.key==='other'); }
+// Client-scoped ("customer-exclusive") products only apply for the client the
+// currently-open sheet is actually for: the logged-in client themself (client
+// mode), whichever existing client staff picked for a manual/walk-in order
+// (manual mode — '' for a typed-name walk-in with no account, since an
+// exclusive item can't apply to someone with no client_id at all), or the
+// client the order-being-edited belongs to (edit mode).
+function activeProductsClientId(){
+  if(sheetMode==='client') return session.userId;
+  if(sheetMode==='manual') return orderDraftManualClientId || null;
+  if(sheetMode==='edit'){
+    const o = db.orders.find(x=>x.id===editingOrderId);
+    return o ? o.userId : null;
+  }
+  return null;
+}
 // Staff-only products (e.g. "Gull"/kilos amarillos) are hidden from the
 // client-facing self-service order sheet (sheetMode==='client') but remain
 // selectable in the staff/admin manual-order sheet (sheetMode==='manual') and
-// the admin-only order-edit sheet (sheetMode==='edit').
+// the admin-only order-edit sheet (sheetMode==='edit'). Customer-exclusive
+// products (ownerClientId set) are hidden from everyone except the one
+// client they're scoped to — staff/admin still see them when acting on
+// behalf of that specific client (manual/edit modes resolve the relevant
+// client via activeProductsClientId above), but not for any other client.
 // This is a client-side convenience filter only — the real enforcement is
-// the order_items_insert_client RLS policy (staff_only_products migration),
-// which rejects a client-originated insert referencing a staff-only product
+// the order_items_insert_client RLS policy (staff_only_products /
+// client_scoped_products migrations), which rejects a client-originated
+// insert referencing a staff-only or someone-else's-exclusive product
 // regardless of what the UI shows.
-function activeProducts(){ return [...db.products].filter(p=>p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit')).sort((a,b)=>a.sortOrder-b.sortOrder); }
+function activeProducts(){
+  const forClientId = activeProductsClientId();
+  return [...db.products]
+    .filter(p=>p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit'))
+    .filter(p=>!p.ownerClientId || p.ownerClientId===forClientId)
+    .sort((a,b)=>a.sortOrder-b.sortOrder);
+}
 function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }
 
 function computeItemCost(it){
@@ -744,7 +776,7 @@ function mapProfile(p){
   return { id:p.id, name:p.name, email:p.email, phone:p.phone, address:p.address||'', registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, role: p.role, preferredLang: p.preferred_lang };
 }
 function mapProduct(p){
-  return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order, staffOnly: !!p.staff_only };
+  return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order, staffOnly: !!p.staff_only, ownerClientId: p.owner_client_id || null };
 }
 function mapSettings(s){
   return { expressPercent:Number(s.express_percent), deliveryFee:Number(s.delivery_fee), pickupFee:Number(s.pickup_fee), discountPercent:Number(s.discount_percent), deliveryEnabled:s.delivery_enabled, pickupEnabled:s.pickup_enabled };
@@ -872,6 +904,7 @@ let editingOrderId = null;
 let orderEditOriginalItems = [];
 let editingProductId = null;
 let addingProduct = false;
+let productOwnerFilter = ''; // '' = all, 'shared' = global only, else a client id
 let addingClient = false;
 let editingClientId = null;
 let clientSubTab = 'active'; // 'active' | 'history'
@@ -2041,7 +2074,7 @@ function renderAdminFailedEmails(){
 
 function productEditFormHtml(p){
   const isNew = !p;
-  const v = p || {en:'',is:'',price:'',unit:'pc',category:'general',active:true,staffOnly:false};
+  const v = p || {en:'',is:'',price:'',unit:'pc',category:'general',active:true,staffOnly:false,ownerClientId:null};
   return `
   <div class="product-edit-form">
     <div class="form-row2">
@@ -2063,6 +2096,12 @@ function productEditFormHtml(p){
     </div>
     <label class="checkbox-row"><input type="checkbox" id="pf-active" ${v.active!==false?'checked':''}> ${t('product_active')}</label>
     <label class="checkbox-row"><input type="checkbox" id="pf-staff-only" ${v.staffOnly?'checked':''}> ${t('product_staff_only')}</label>
+    <div class="field"><label>${t('product_owner_client')}</label>
+      <select id="pf-owner-client">
+        <option value="">${t('product_owner_global')}</option>
+        ${db.users.map(u=>`<option value="${u.id}" ${v.ownerClientId===u.id?'selected':''}>${u.name}</option>`).join('')}
+      </select>
+    </div>
     <div class="staff-actions">
       <button style="background:var(--teal)" id="pf-save" data-editing="${isNew?'new':p.id}">${t('save')}</button>
       <button style="background:#8a929e" id="pf-cancel">${t('cancel')}</button>
@@ -2070,15 +2109,35 @@ function productEditFormHtml(p){
   </div>`;
 }
 function renderAdminProducts(){
-  const products = [...db.products].sort((a,b)=>a.sortOrder-b.sortOrder);
+  const products = [...db.products]
+    .filter(p=>{
+      if(productOwnerFilter==='') return true;
+      if(productOwnerFilter==='shared') return !p.ownerClientId;
+      return p.ownerClientId===productOwnerFilter;
+    })
+    .sort((a,b)=>a.sortOrder-b.sortOrder);
+  // Only offer filtering by a customer if at least one product is actually
+  // scoped to someone — keeps the control out of the way for shops that
+  // never use this feature.
+  const scopedOwnerIds = [...new Set(db.products.filter(p=>p.ownerClientId).map(p=>p.ownerClientId))];
   return `
+    ${scopedOwnerIds.length ? `
+    <div class="field">
+      <label>${t('product_owner_filter_label')}</label>
+      <select id="product-owner-filter">
+        <option value="" ${productOwnerFilter===''?'selected':''}>${t('product_owner_filter_all')}</option>
+        <option value="shared" ${productOwnerFilter==='shared'?'selected':''}>${t('product_owner_filter_shared')}</option>
+        ${scopedOwnerIds.map(id=>{ const u=db.users.find(x=>x.id===id); return `<option value="${id}" ${productOwnerFilter===id?'selected':''}>${u?u.name:id}</option>`; }).join('')}
+      </select>
+    </div>` : ''}
     ${!addingProduct ? `<button class="add-item" id="btn-add-product">${t('add_product')}</button>` : productEditFormHtml(null)}
     ${products.map((p,i)=>{
       if(editingProductId===p.id) return productEditFormHtml(p);
       const usedInOrders = db.orders.some(o=>o.items.some(it=>it.tipo===p.key));
+      const ownerName = p.ownerClientId ? (db.users.find(u=>u.id===p.ownerClientId)?.name || p.ownerClientId) : null;
       return `
       <div class="product-row ${p.active?'':'inactive'}">
-        <div class="pname"><div class="en">${p.en}${!p.active?` · <span style="color:var(--danger)">${t('inactive_tag')}</span>`:''}${p.staffOnly?` · <span style="color:var(--muted,#8a929e)">${t('product_staff_only')}</span>`:''}</div><div class="is">${p.is}</div></div>
+        <div class="pname"><div class="en">${p.en}${!p.active?` · <span style="color:var(--danger)">${t('inactive_tag')}</span>`:''}${p.staffOnly?` · <span style="color:var(--muted,#8a929e)">${t('product_staff_only')}</span>`:''}${ownerName?` · <span style="color:var(--muted,#8a929e)">${t('product_owner_tag_prefix')} ${ownerName}</span>`:''}</div><div class="is">${p.is}</div></div>
         <div class="pprice">${p.price===null?t('quote_pending_item'):fmtISK(p.price)}</div>
         <div class="pbtns">
           <button class="icon-btn" data-move-up="${p.id}" title="${t('move_up')}" ${i===0?'disabled':''}>↑</button>
@@ -2264,9 +2323,13 @@ function bindEvents(){
   const btnLogOrder = document.getElementById('btn-log-order');
   if(btnLogOrder) btnLogOrder.onclick = ()=>{
     sheetMode = 'manual';
+    // Reset before the activeProducts() call below — it reads
+    // orderDraftManualClientId (via activeProductsClientId) to decide which
+    // customer-exclusive products to include, so a stale id left over from a
+    // previous manual order must be cleared first, not after.
+    orderDraftManualClientId = ''; orderDraftManualName = '';
     orderDraftItems = [{tipo:activeProducts()[0].key, cant:1, desc:''}];
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
-    orderDraftManualClientId = ''; orderDraftManualName = '';
     orderDraftFecha = todayISO();
     orderDraftComentarios = '';
     editingOrderId = null; orderEditOriginalItems = [];
@@ -2300,6 +2363,12 @@ function bindEvents(){
     // fired when staff pick an existing client for a manual order — re-render
     // needed so the (shared) address field reflects the new default value.
     orderDraftMods.pickupAddress = clientAddressById(orderDraftManualClientId);
+    // Switching clients mid-draft can leave an item pointing at a product
+    // that was exclusive to the *previous* client and is no longer valid for
+    // the new one — fall back those items to the first still-valid product
+    // rather than silently keeping an invisible selection.
+    const validKeys = new Set(activeProducts().map(p=>p.key));
+    orderDraftItems.forEach(it=>{ if(!validKeys.has(it.tipo)) it.tipo = activeProducts()[0].key; });
     render();
   };
   const manualClientName = document.getElementById('manual-client-name');
@@ -2566,6 +2635,7 @@ function bindEvents(){
     const category = document.getElementById('pf-category').value;
     const active = document.getElementById('pf-active').checked;
     const staffOnly = document.getElementById('pf-staff-only').checked;
+    const ownerClientId = document.getElementById('pf-owner-client').value || null;
     if(!en || !is){ toast(t('err_product_fields')); return; }
     const editing = pfSave.dataset.editing;
     try{
@@ -2573,13 +2643,13 @@ function bindEvents(){
         const key = 'p_'+Date.now();
         const maxOrder = Math.max(0, ...db.products.map(p=>p.sortOrder));
         const { error } = await sb.from('products').insert({
-          id: key, name_en: en, name_is: is, price, unit, category, active, sort_order: maxOrder+1, staff_only: staffOnly
+          id: key, name_en: en, name_is: is, price, unit, category, active, sort_order: maxOrder+1, staff_only: staffOnly, owner_client_id: ownerClientId
         });
         if(error) throw error;
         addingProduct=false; toast(t('product_added'));
       } else {
         const { error } = await sb.from('products').update({
-          name_en: en, name_is: is, price, unit, category, active, staff_only: staffOnly
+          name_en: en, name_is: is, price, unit, category, active, staff_only: staffOnly, owner_client_id: ownerClientId
         }).eq('id', editing);
         if(error) throw error;
         editingProductId=null; toast(t('product_updated'));
@@ -2587,6 +2657,8 @@ function bindEvents(){
       await loadProducts(); render();
     } catch(e){ console.error('save product', e); toast(t('err_generic')); }
   };
+  const productOwnerFilterSelect = document.getElementById('product-owner-filter');
+  if(productOwnerFilterSelect) productOwnerFilterSelect.onchange = ()=>{ productOwnerFilter = productOwnerFilterSelect.value; render(); };
   app.querySelectorAll('[data-toggle-active]').forEach(b=>b.onclick=async ()=>{
     const p = db.products.find(x=>x.id===b.dataset.toggleActive);
     try{
