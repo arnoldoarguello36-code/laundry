@@ -1,0 +1,22 @@
+{
+  "name": "Þvottafélagið",
+  "short_name": "Þvottafélagið",
+  "description": "Þvottafélagið laundry order management",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#F1EEE7",
+  "theme_color": "#2F8F86",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
