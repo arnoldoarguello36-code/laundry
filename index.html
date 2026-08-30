@@ -2777,5 +2777,15 @@ sb.auth.onAuthStateChange((event, _authSession)=>{
   startPolling();
 })();
 </script>
+<script>
+  // Registers sw.js so Chrome/Android treats this as an installable PWA
+  // (manifest + SW = automatic "Add to Home screen" / install prompt).
+  // Relative path so it resolves correctly under the GitHub Pages subpath.
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(e => console.error('sw register', e));
+    });
+  }
+</script>
 </body>
 </html>
