@@ -749,6 +749,18 @@ function activeProducts(){
     .sort((a,b)=>a.sortOrder-b.sortOrder);
 }
 function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }
+// Security (see TODOS.md "HTML-escape user-controlled order/client text"):
+// render() does one big innerHTML re-render from template-literal strings, so
+// any client/staff-submitted free text (order item "other" desc, order
+// comments, pickup address, client name/address, staff notes) interpolated
+// into those strings is a stored-XSS path into the same page that holds the
+// staff/admin Supabase JWT in localStorage. Every such value must be passed
+// through esc() at the point it's placed into HTML (text node or attribute) —
+// escaping here (a single shared choke point) rather than at data-ingestion
+// keeps the raw string available for validation/business logic (e.g. the
+// !it.desc.trim() checks, price computation) and for re-serializing back to
+// Supabase unmodified.
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function computeItemCost(it){
   if(it.priceOverride!=null) return it.priceOverride * it.cant;
@@ -805,9 +817,14 @@ function mapOrder(o){
 // must go through this helper, or a client-placed order renders the literal
 // string "null" (found live in the staff Orders tab on ORD-1000 during QA).
 function orderClientName(o){
-  if(o.clientName) return o.clientName;
+  // Escaped here (single choke point for all ~7 render call sites) rather
+  // than at the caller — this function is display-only everywhere it's used,
+  // including as a revByClientName aggregation key (see computeReports),
+  // where escaping is harmless since the key only ever flows back into a
+  // chart label.
+  if(o.clientName) return esc(o.clientName);
   const u = db.users.find(u=>u.id===o.userId);
-  return u ? u.name : t('client_unknown');
+  return u ? esc(u.name) : t('client_unknown');
 }
 // Order-sheet address prefill (shared by the client self-service flow and
 // the staff manual-order flow, per the shared pickup/delivery address
@@ -943,7 +960,7 @@ function noteText(n){
   if(n.kind === 'status') return t('status_updated_note')+' "'+statusLabel(n.estado)+'".';
   if(n.kind === 'problem') return t('problem_note');
   if(n.kind === 'resolved') return t('resolved_note');
-  if(n.kind === 'note') return n.text;
+  if(n.kind === 'note') return esc(n.text);
   return '';
 }
 
@@ -1135,7 +1152,7 @@ function renderClienteView(){
   const shown = clientSubTab==='active' ? activeOrdenes : historyOrdenes;
   return `
   <div class="content">
-    <div class="section-title">${t('hello')}, ${user ? user.name.split(' ')[0] : ''}</div>
+    <div class="section-title">${t('hello')}, ${user ? esc(user.name.split(' ')[0]) : ''}</div>
     <div class="staff-tabs">
       <button data-clientsubtab="active" class="${clientSubTab==='active'?'active':''}">${t('tab_active')} (${activeOrdenes.length})</button>
       <button data-clientsubtab="history" class="${clientSubTab==='history'?'active':''}">${t('tab_history')} (${historyOrdenes.length})</button>
@@ -1165,11 +1182,11 @@ function renderDesktopClienteView(){
   <div class="ds-shell">
     <aside class="ds-sidebar">
       <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('my_orders')}</span></div>
-      <div class="ds-sidebar-foot">${t('signed_in_as')} ${user ? user.name : ''}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
+      <div class="ds-sidebar-foot">${t('signed_in_as')} ${user ? esc(user.name) : ''}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
     </aside>
     <main class="ds-main">
       <div class="ds-topbar">
-        <div><h1>${t('hello')}, ${user ? user.name.split(' ')[0] : ''}</h1></div>
+        <div><h1>${t('hello')}, ${user ? esc(user.name.split(' ')[0]) : ''}</h1></div>
         <div class="ds-topbar-actions">
           <button class="btn btn-primary ds-new-order-btn" id="btn-nueva-orden">${t('new_order')}</button>
           ${renderLangSwitch()}
@@ -1186,7 +1203,7 @@ function renderDesktopClienteView(){
           </div>
           ${shown.length===0 ? `<div class="ds-list-empty">${clientSubTab==='active'?t('empty_orders_title'):t('no_history_title')}</div>` :
             shown.map(o=>{
-              const itemsStr = o.items.map(it=>{ const p=priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+              const itemsStr = o.items.map(it=>{ const p=priceEntry(it.tipo); const label = it.tipo==='other' ? esc(it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
               return `<div class="ds-order-row ${o.id===selectedOrderId?'active':''}" data-orderrow="${o.id}">
                 <div class="oid">${o.id}</div>
                 <div class="items">${itemsStr}</div>
@@ -1198,7 +1215,7 @@ function renderDesktopClienteView(){
           ${!selected ? `<div class="ds-list-empty">${clientSubTab==='active'?t('empty_orders_sub'):t('no_history_sub')}</div>` : `
           <h2>${selected.id}</h2>
           <p class="sub">${t('requested_delivery')}: ${fmtFecha(selected.fecha)}</p>
-          ${selected.pickup && selected.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${selected.pickupAddress}</div>` : ''}
+          ${selected.pickup && selected.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${esc(selected.pickupAddress)}</div>` : ''}
           ${badgeRow(selected)}
           ${pipelineHtml(selected.estado)}
           ${priceBlockHtml(selected)}
@@ -1229,7 +1246,7 @@ function priceBlockHtml(o){
   const {itemsTotal, expressFee, deliveryFee, pickupFee, discount, total, hasPending} = computeOrderTotals(o.items, o);
   const lines = o.items.map(it=>{
     const p = priceEntry(it.tipo);
-    const label = it.tipo==='other' ? (it.desc || t('other_ph')) : (p[lang]||p.en);
+    const label = it.tipo==='other' ? esc(it.desc || t('other_ph')) : (p[lang]||p.en);
     const cost = computeItemCost(it);
     return `<div class="price-line ${cost===null?'pending':''}"><span>${it.cant}× ${label}</span><span class="amount">${cost===null ? t('quote_pending_item') : fmtISK(cost)}</span></div>`;
   }).join('');
@@ -1245,13 +1262,13 @@ function priceBlockHtml(o){
   </div>`;
 }
 function renderOrderCardCliente(o){
-  const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+  const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? esc(it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
   const lastNote = o.notas[o.notas.length-1];
   return `
   <div class="order-card">
     ${badgeRow(o)}
     <div class="row-top"><div><div class="oid">${o.id}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
-    ${o.pickup && o.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${o.pickupAddress}</div>` : ``}
+    ${o.pickup && o.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${esc(o.pickupAddress)}</div>` : ``}
     ${pipelineHtml(o.estado)}
     ${priceBlockHtml(o)}
     ${lastNote ? `<div class="comment">📝 ${noteText(lastNote)}</div>` : ``}
@@ -1286,10 +1303,10 @@ function renderSheet(){
     <div class="field"><label>${t('select_existing_client')}</label>
       <select id="manual-client-select">
         <option value="">—</option>
-        ${db.users.map(u=>`<option value="${u.id}" ${orderDraftManualClientId===u.id?'selected':''}>${u.name}</option>`).join('')}
+        ${db.users.map(u=>`<option value="${u.id}" ${orderDraftManualClientId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}
       </select>
     </div>
-    <div class="field"><label>${t('or_type_name')}</label><input id="manual-client-name" value="${orderDraftManualName}" placeholder="${t('walkin_client_ph')}"></div>
+    <div class="field"><label>${t('or_type_name')}</label><input id="manual-client-name" value="${esc(orderDraftManualName)}" placeholder="${t('walkin_client_ph')}"></div>
     ` : ''}
     ${isEdit && editingOrder ? `
     <div class="field"><label>${t('client_label')}</label><div class="item-price-hint">${editingOrder.id} · ${orderClientName(editingOrder)}</div></div>
@@ -1309,7 +1326,7 @@ function renderSheet(){
         <select data-item-tipo="${i}">${activeProducts().map(s=>`<option value="${s.key}" ${s.key===it.tipo?'selected':''}>${s[lang]||s.en}</option>`).join('')}</select>
         <input type="number" min="1" class="qty-input" data-item-cant="${i}" value="${it.cant}">
         ${it.tipo!=='other' ? `<span class="qty-unit">${t('unit_abbr_'+p.unit)}</span>` : ''}
-        ${it.tipo==='other' ? `<input type="text" class="other-input" data-item-desc="${i}" value="${it.desc||''}" placeholder="${t('other_ph')}">` : ''}
+        ${it.tipo==='other' ? `<input type="text" class="other-input" data-item-desc="${i}" value="${esc(it.desc||'')}" placeholder="${t('other_ph')}">` : ''}
         ${orderDraftItems.length>1 ? `<button data-remove-item="${i}">✕</button>`:''}
       </div>${hint}${priceField}`;
     }).join('')}
@@ -1326,7 +1343,7 @@ function renderSheet(){
       <label>${t('pickup_section')}</label>
       <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
     </div>` : ''}
-    ${(orderDraftMods.pickup || orderDraftMods.returnMethod==='delivery') ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${orderDraftMods.pickupAddress||''}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
+    ${(orderDraftMods.pickup || orderDraftMods.returnMethod==='delivery') ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${esc(orderDraftMods.pickupAddress||'')}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
 
     ${hidePrices ? '' : `
     <div class="order-total-preview">
@@ -1340,7 +1357,7 @@ function renderSheet(){
     </div>`}
 
     <div class="field"><label>${isManualLike ? t('req_date_manual') : t('req_date')}</label><input type="date" id="orden-fecha" value="${orderDraftFecha}" ${isManualLike ? '' : `min="${todayISO()}"`}></div>
-    <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}">${orderDraftComentarios||''}</textarea></div>
+    <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}">${esc(orderDraftComentarios||'')}</textarea></div>
     <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${isEdit ? t('save_order_changes') : t('submit_order')}</button>
     <button class="btn btn-ghost" id="btn-cancel-orden" style="width:100%;">${t('cancel')}</button>
   </div>`;
@@ -1415,7 +1432,7 @@ function renderDesktopToday(s){
       <table class="ds-table">
         <thead><tr><th>${t('col_order')}</th><th>${t('col_client')}</th><th>${t('col_items')}</th><th>${t('col_status')}</th></tr></thead>
         <tbody>${dueRows.map(o=>{
-          const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+          const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? esc(it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
           return `<tr><td>${o.id}</td><td>${orderClientName(o)}</td><td>${itemsStr}</td><td><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></td></tr>`;
         }).join('')}</tbody>
       </table>`}
@@ -1424,7 +1441,7 @@ function renderDesktopToday(s){
       <h2>${t('contract_dashboard_title')}</h2>
       <p class="sub">${t('contract_dashboard_sub')}</p>
       ${s.contractToday.length===0 ? `<p class="chart-sub">${t('no_contract_activity')}</p>` :
-        s.contractToday.map(c=>`<div class="price-line"><span class="name">${c.name}</span><span class="qty">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>`).join('')}
+        s.contractToday.map(c=>`<div class="price-line"><span class="name">${esc(c.name)}</span><span class="qty">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>`).join('')}
       <div class="ds-note">${t('contract_activity_note')}</div>
     </div>
   </div>`;
@@ -1472,7 +1489,7 @@ function renderStaffToday(){
     <p class="chart-sub">${t('contract_dashboard_sub')}</p>
     ${s.contractToday.length===0 ? `<p class="chart-sub">${t('no_contract_activity')}</p>` :
       s.contractToday.map(c=>`
-      <div class="price-line"><span class="qty-name">${c.name}</span><span class="amount">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>
+      <div class="price-line"><span class="qty-name">${esc(c.name)}</span><span class="amount">${c.qty} ${t('items_processed')} · ${c.orders} ${t('orders_count')}</span></div>
     `).join('')}
   </div>` : ''}`;
 }
@@ -1500,7 +1517,7 @@ function renderStaffOrders(){
       <label>${t('client_label')}</label>
       <select id="staff-client-filter">
         <option value="todos" ${staffClientFilter==='todos'?'selected':''}>${t('all_clients')}</option>
-        ${db.users.map(u=>`<option value="${u.id}" ${staffClientFilter===u.id?'selected':''}>${u.name}</option>`).join('')}
+        ${db.users.map(u=>`<option value="${u.id}" ${staffClientFilter===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}
       </select>
     </div>
     <div class="filters">
@@ -1512,15 +1529,15 @@ function renderStaffOrders(){
 }
 
 function renderOrderCardStaff(o){
-  const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? (it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
+  const itemsStr = o.items.map(it=>{ const p = priceEntry(it.tipo); const label = it.tipo==='other' ? esc(it.desc||t('other_ph')) : (p[lang]||p.en); return `${it.cant}× ${label}`; }).join(', ');
   const idx = ESTADOS.indexOf(o.estado);
   const nextEstado = ESTADOS[idx+1];
   return `
   <div class="order-card">
     ${badgeRow(o)}
     <div class="row-top"><div><div class="oid">${o.id} · ${orderClientName(o)}</div><h3>${itemsStr}</h3><p class="meta">${t('requested_delivery')}: ${fmtFecha(o.fecha)}</p></div><span class="badge ${o.estado}">${statusLabel(o.estado)}</span></div>
-    ${o.comentarios ? `<div class="comment">💬 ${t('client_says')}: "${o.comentarios}"</div>` : ``}
-    ${o.pickup && o.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${o.pickupAddress}</div>` : ``}
+    ${o.comentarios ? `<div class="comment">💬 ${t('client_says')}: "${esc(o.comentarios)}"</div>` : ``}
+    ${o.pickup && o.pickupAddress ? `<div class="comment">📍 ${t('pickup_address_note')}: ${esc(o.pickupAddress)}</div>` : ``}
     ${pipelineHtml(o.estado)}
     ${session.role==='admin' ? priceBlockHtml(o) : ''}
     <div class="staff-actions">
@@ -1557,11 +1574,11 @@ function clientEditFormHtml(u){
   return `
   <div class="product-edit-form">
     <div class="form-row2">
-      <div class="field"><label>${t('full_name')}</label><input id="ce-name" value="${u.name}"></div>
-      <div class="field"><label>${t('email')}</label><input id="ce-email" type="email" value="${u.email}"></div>
+      <div class="field"><label>${t('full_name')}</label><input id="ce-name" value="${esc(u.name)}"></div>
+      <div class="field"><label>${t('email')}</label><input id="ce-email" type="email" value="${esc(u.email)}"></div>
     </div>
-    <div class="field"><label>${t('phone')}</label><input id="ce-phone" type="tel" value="${u.phone}"></div>
-    <div class="field"><label>${t('reg_address_label')}</label><input id="ce-address" value="${u.address||''}" placeholder="${t('reg_address_ph')}"></div>
+    <div class="field"><label>${t('phone')}</label><input id="ce-phone" type="tel" value="${esc(u.phone)}"></div>
+    <div class="field"><label>${t('reg_address_label')}</label><input id="ce-address" value="${esc(u.address||'')}" placeholder="${t('reg_address_ph')}"></div>
     <label class="checkbox-row"><input type="checkbox" id="ce-notifications" ${u.notificationsEnabled!==false?'checked':''}> ${t('notifications_enabled')}</label>
     <div class="item-price-hint" style="margin-bottom:10px;">${t('notifications_off_hint')}</div>
     <label class="checkbox-row"><input type="checkbox" id="ce-contract" ${u.isContract?'checked':''}> ${t('contract_client')}</label>
@@ -1583,7 +1600,7 @@ function renderStaffClients(){
       u.notificationsEnabled===false ? `<span class="badge-mini" style="background:#8a929e;">${lang==='is'?'HLJÓÐLAUS':'MUTED'}</span>` : ''
     ].join('');
     return `<div class="client-card">
-      <div class="client-info"><h3>${u.name}</h3><p>${u.email}</p>${tags?`<div class="badge-row" style="margin-top:4px;">${tags}</div>`:''}</div>
+      <div class="client-info"><h3>${esc(u.name)}</h3><p>${esc(u.email)}</p>${tags?`<div class="badge-row" style="margin-top:4px;">${tags}</div>`:''}</div>
       <div class="client-stat"><div class="num">${orders.length}</div><div class="lbl">${t('orders_count')}</div></div>
       <div style="display:flex;flex-direction:column;gap:5px;">
         <button class="client-view-btn" data-view-client="${u.id}">${t('view_orders')}</button>
@@ -1609,7 +1626,10 @@ function svgHBar(rows, opts){
   const max = Math.max(1, ...rows.map(r=>r.value));
   const body = rows.map((r,i)=>{
     const bw = trackW*(r.value/max); const y=i*(barH+gap);
-    const label = r.label.length>14 ? r.label.slice(0,13)+'…' : r.label;
+    // r.label can be client-controlled (topClients/revenueByClient rows carry
+    // profiles.name) — escape before embedding in the SVG <text> markup,
+    // which is part of the same innerHTML string as the rest of the page.
+    const label = esc(r.label.length>14 ? r.label.slice(0,13)+'…' : r.label);
     const valueLabel = opts.fmt ? opts.fmt(r.value) : r.value;
     return `<text x="0" y="${y+barH*0.68}" font-size="10.5" font-weight="600" fill="#4A5568" font-family="Karla,sans-serif">${label}</text>
       <rect x="${leftPad}" y="${y}" width="${trackW}" height="${barH}" rx="6" fill="#F0EDE5"/>
@@ -1821,7 +1841,7 @@ function renderVolumeReport(){
         <label>${t('rep_volume_client')}</label>
         <select id="vol-client">
           <option value="all" ${volumeClientFilter==='all'?'selected':''}>${t('rep_volume_all_clients')}</option>
-          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${c.name}</option>`).join('')}
+          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
         </select>
       </div>
       ${r.activeProductIds.length===0 ? `<p class="chart-sub">${t('rep_no_data')}</p>` : `
@@ -1977,7 +1997,7 @@ function renderDesktopVolumeReport(){
         <label>${t('rep_volume_client')}</label>
         <select id="vol-client">
           <option value="all" ${volumeClientFilter==='all'?'selected':''}>${t('rep_volume_all_clients')}</option>
-          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${c.name}</option>`).join('')}
+          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
         </select>
       </div>
       ${r.activeProductIds.length===0 ? `<p class="sub">${t('rep_no_data')}</p>` : `
@@ -2108,7 +2128,7 @@ function productEditFormHtml(p){
     <div class="field"><label>${t('product_owner_client')}</label>
       <select id="pf-owner-client">
         <option value="">${t('product_owner_global')}</option>
-        ${db.users.map(u=>`<option value="${u.id}" ${v.ownerClientId===u.id?'selected':''}>${u.name}</option>`).join('')}
+        ${db.users.map(u=>`<option value="${u.id}" ${v.ownerClientId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}
       </select>
     </div>
     <div class="staff-actions">
@@ -2136,7 +2156,7 @@ function renderAdminProducts(){
       <select id="product-owner-filter">
         <option value="" ${productOwnerFilter===''?'selected':''}>${t('product_owner_filter_all')}</option>
         <option value="shared" ${productOwnerFilter==='shared'?'selected':''}>${t('product_owner_filter_shared')}</option>
-        ${scopedOwnerIds.map(id=>{ const u=db.users.find(x=>x.id===id); return `<option value="${id}" ${productOwnerFilter===id?'selected':''}>${u?u.name:id}</option>`; }).join('')}
+        ${scopedOwnerIds.map(id=>{ const u=db.users.find(x=>x.id===id); return `<option value="${id}" ${productOwnerFilter===id?'selected':''}>${u?esc(u.name):id}</option>`; }).join('')}
       </select>
     </div>` : ''}
     ${!addingProduct ? `<button class="add-item" id="btn-add-product">${t('add_product')}</button>` : productEditFormHtml(null)}
@@ -2177,7 +2197,7 @@ function renderAdminQuotes(){
         ${pendingItems.map(it=>`
           <div class="checkbox-row" style="align-items:flex-end;">
             <div style="flex:1;">
-              <label>${it.cant}× "${it.desc||t('other_ph')}"</label>
+              <label>${it.cant}× "${esc(it.desc||t('other_ph'))}"</label>
               <input type="number" min="0" placeholder="${t('assign_price')}" data-quote-price="${it.id}" value="${quotePriceDrafts[it.id]||''}">
             </div>
             <button class="btn btn-teal btn-sm" data-quote-save="${it.id}">${t('save_price')}</button>
