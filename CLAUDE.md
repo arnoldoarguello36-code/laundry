@@ -22,3 +22,7 @@ Key routing rules:
 - Save progress → invoke /context-save
 - Resume context → invoke /context-restore
 - Author a backlog-ready spec/issue → invoke /spec
+
+## Testing
+
+Run `bun test` (Bun's `node:test`-compatible runner) from the repo root — no config file, no separate test directory setup needed. Test files live in `test/*.test.js` and pull real declarations straight out of `index.html` via `test/lib/extract-source.js` (brace-counting extraction, no build step), so tests exercise the exact shipped implementation instead of a reimplementation that could drift.
