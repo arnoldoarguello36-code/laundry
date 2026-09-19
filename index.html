@@ -46,6 +46,8 @@
     .ds-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
     .ds-sidebar{background:var(--ink);color:#fff;padding:24px 16px;display:flex;flex-direction:column;gap:28px;}
     .ds-brand{font-family:'Fraunces',serif;font-size:19px;font-weight:600;color:#fff;letter-spacing:.01em;}
+    .ds-brand-row{display:flex;align-items:center;gap:10px;}
+    .ds-logo{width:28px;height:28px;border-radius:7px;flex-shrink:0;display:block;}
     .ds-brand-sub{display:block;font-family:'Karla',sans-serif;font-size:11px;color:#9AA5B5;font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
     .ds-nav{display:flex;flex-direction:column;gap:2px;}
     .ds-nav button{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;border:none;background:none;color:#C7CEDA;text-decoration:none;font-size:14px;font-weight:600;font-family:inherit;text-align:left;cursor:pointer;}
@@ -97,6 +99,7 @@
     .ds-content-cards > .filters,
     .ds-content-cards > .empty-state,
     .ds-content-cards > .admin-banner,
+    .ds-content-cards > .order-group-header,
     .ds-content-cards > .product-edit-form{grid-column:1/-1;}
     /* Form-heavy tabs (products/pricing) stay single-column at a readable width. */
     .ds-content-form{max-width:640px;}
@@ -146,6 +149,20 @@
     .ds-detail-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px;box-shadow:var(--shadow-sm);}
     .ds-detail-panel h2{margin:0 0 4px;font-size:22px;}
     .ds-detail-panel .sub{color:var(--ink-soft);font-size:14px;margin-bottom:8px;}
+
+    /* --- Order sheet (new/manual/edit order): desktop modal. Same markup as
+       the mobile bottom-drawer (renderSheet() isn't forked per-viewport), so
+       this is a pure repositioning/resizing override rather than a rewrite —
+       client feedback 2026-09-19: the mobile drawer floating bottom-anchored
+       on a MacBook Air-width screen "looks strange". Centering it as a
+       regular dialog plus pairing the manual-entry client fields onto one
+       row (.sheet-row2, used only by renderSheet()'s manual-mode block)
+       also addresses the paired "simplify the manual order form" ask by
+       cutting a row of vertical scrolling. --- */
+    .sheet{left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:640px;max-width:calc(100vw - 64px);max-height:85vh;border-radius:18px;padding:30px 34px 34px;}
+    .sheet-handle{display:none;}
+    .sheet-row2{display:flex;gap:16px;}
+    .sheet-row2 .field{flex:1;}
   }
 
   .topbar{padding:16px 18px 12px;display:flex;flex-direction:column;background:var(--card);position:sticky;top:0;z-index:20;gap:10px;box-shadow:var(--shadow-sm);}
@@ -183,6 +200,7 @@
   .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:#8a929e;font-weight:700;margin:20px 0 10px;}
   .section-title:first-child{margin-top:2px;}
   .subsection-title{font-size:13px;font-weight:700;margin:18px 0 8px;color:var(--ink);}
+  .order-group-header{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8a929e;margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line);}
 
   .order-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 17px;margin-bottom:12px;box-shadow:var(--shadow-sm);}
   .order-card .row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
@@ -387,7 +405,7 @@ const I18N = {
     req_date_manual:"Ready by",
     comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
     opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
-    pickup_address_label:"Pickup/delivery address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Address",
+    pickup_address_label:"Pickup/delivery address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Address", pickup_address_on_file:"Address on file",
     reg_address_label:"Address (optional)", reg_address_ph:"Street, number, floor/apt...", reg_address_note:"We'll use this to prefill your pickup/delivery address on future orders. You can change it any time.",
     pickup_section:"Home pickup (optional)",
     return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
@@ -411,6 +429,7 @@ const I18N = {
     billing_pending_note:"item(s) awaiting a price — excluded from the total above",
     all:"All", client_label:"Client:", all_clients:"All clients",
     no_orders_filter:"No orders here", no_orders_filter_sub:"There are no orders matching this filter yet.",
+    group_today:"Today", group_yesterday:"Yesterday", group_orders_count:"order(s)",
     client_says:"Client", advance_to:"Advance to", mark_delivered:"✓ Delivered today", flag_issue:"Flag issue", resolve_issue:"Resolve issue",
     note_ph:"Add a note for the client...", send:"Send",
     orders_count:"orders", view_orders:"View orders",
@@ -542,7 +561,7 @@ const I18N = {
     req_date_manual:"Skiladagur",
     comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
     opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
-    pickup_address_label:"Heimilisfang fyrir sókn/heimsendingu", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang",
+    pickup_address_label:"Heimilisfang fyrir sókn/heimsendingu", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang", pickup_address_on_file:"Heimilisfang á skrá",
     reg_address_label:"Heimilisfang (valfrjálst)", reg_address_ph:"Gata, númer, hæð/íbúð...", reg_address_note:"Við notum þetta til að forfylla heimilisfang fyrir sókn/heimsendingu í framtíðarpöntunum. Þú getur breytt því hvenær sem er.",
     pickup_section:"Sækja heim (valfrjálst)",
     return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
@@ -566,6 +585,7 @@ const I18N = {
     billing_pending_note:"liður bíður verðs — ekki talinn með í samtölu hér að ofan",
     all:"Allt", client_label:"Viðskiptavinur:", all_clients:"Allir viðskiptavinir",
     no_orders_filter:"Engar pantanir hér", no_orders_filter_sub:"Engar pantanir passa við þessa síu ennþá.",
+    group_today:"Í dag", group_yesterday:"Í gær", group_orders_count:"pöntun/pantanir",
     client_says:"Viðskiptavinur", advance_to:"Færa í", mark_delivered:"✓ Afhent í dag", flag_issue:"Merkja vandamál", resolve_issue:"Merkja leyst",
     note_ph:"Bæta við athugasemd fyrir viðskiptavin...", send:"Senda",
     orders_count:"pantanir", view_orders:"Skoða pantanir",
@@ -689,6 +709,46 @@ function statusLabel(e){ return t('status')[e]; }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function isToday(ts){ return new Date(ts).toDateString() === new Date().toDateString(); }
 function isOverdue(o){ return o.fecha < todayISO() && o.estado !== 'entregado'; }
+const DAY_MS = 86400000;
+
+// Client feedback 2026-09-19: "group orders placed the same day" — the
+// staff Orders list is already sorted by o.creado desc, so same-day orders
+// land adjacent to each other; this just labels the boundary between days
+// (see groupOrdersByDay() in renderStaffOrders()) rather than changing the
+// underlying order records or their sort.
+function dayLabel(ts){
+  const d = new Date(ts);
+  const startOf = x => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const diffDays = Math.round((startOf(new Date()) - startOf(d)) / DAY_MS);
+  if(diffDays === 0) return t('group_today');
+  if(diffDays === 1) return t('group_yesterday');
+  // Include the year once the order falls outside the current calendar year —
+  // otherwise two group headers exactly a year apart render identical text
+  // (e.g. "Wednesday, 15 September") even though they're separate groups.
+  const fmt = {weekday:'long', day:'2-digit', month:'long'};
+  if(d.getFullYear() !== new Date().getFullYear()) fmt.year = 'numeric';
+  return d.toLocaleDateString(lang==='is'?'is-IS':'en-GB', fmt);
+}
+// Pure grouping helper (no rendering) so it's unit-testable the same way
+// computeTodaySummary() is (see test/layout.test.js) — groups a
+// creado-sorted order array into same-calendar-day buckets, preserving
+// input order within each bucket. Keyed by a Map (not adjacent-comparison)
+// so it's correct regardless of the caller's sort order — today's only
+// caller (renderStaffOrders()) pre-sorts by creado desc so same-day orders
+// are already adjacent, but a future caller sorting by something else
+// (urgency, client name) would otherwise silently fragment one calendar
+// day into multiple groups instead of erroring.
+function groupOrdersByDay(orders){
+  const groups = [];
+  const byKey = new Map();
+  orders.forEach(o=>{
+    const key = new Date(o.creado).toDateString();
+    let group = byKey.get(key);
+    if(!group){ group = {key, sample:o.creado, items:[]}; byKey.set(key, group); groups.push(group); }
+    group.items.push(o);
+  });
+  return groups;
+}
 
 // Desktop breakpoint: 900px, kept in sync with the CSS `@media (min-width:900px)`
 // block below (search "DESKTOP_BREAKPOINT" in <style> for the matching comment).
@@ -761,6 +821,14 @@ function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-
 // !it.desc.trim() checks, price computation) and for re-serializing back to
 // Supabase unmodified.
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Shared sidebar brand/logo block for the desktop staff and admin shells
+// (renderDesktopStaffShell()/renderDesktopAdminShell()) — the two were
+// byte-for-byte identical except for the panel sub-label, so this pulls the
+// markup into one place to avoid the pair drifting apart on a future
+// logo/wordmark tweak.
+function renderBrandLogo(panelLabel){
+  return `<div class="ds-brand"><div class="ds-brand-row"><img src="icons/icon-192.png" alt="" class="ds-logo">Þvottafélagið</div><span class="ds-brand-sub">${panelLabel}</span></div>`;
+}
 
 function computeItemCost(it){
   if(it.priceOverride!=null) return it.priceOverride * it.cant;
@@ -1300,13 +1368,15 @@ function renderSheet(){
     <p class="sub">${isEdit ? t('edit_order_sub') : (isManual ? t('manual_order_sub') : t('new_order_sub'))}</p>
 
     ${isManual ? `
-    <div class="field"><label>${t('select_existing_client')}</label>
-      <select id="manual-client-select">
-        <option value="">—</option>
-        ${db.users.map(u=>`<option value="${u.id}" ${orderDraftManualClientId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}
-      </select>
+    <div class="sheet-row2">
+      <div class="field"><label>${t('select_existing_client')}</label>
+        <select id="manual-client-select">
+          <option value="">—</option>
+          ${db.users.map(u=>`<option value="${u.id}" ${orderDraftManualClientId===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>${t('or_type_name')}</label><input id="manual-client-name" value="${esc(orderDraftManualName)}" placeholder="${t('walkin_client_ph')}"></div>
     </div>
-    <div class="field"><label>${t('or_type_name')}</label><input id="manual-client-name" value="${esc(orderDraftManualName)}" placeholder="${t('walkin_client_ph')}"></div>
     ` : ''}
     ${isEdit && editingOrder ? `
     <div class="field"><label>${t('client_label')}</label><div class="item-price-hint">${editingOrder.id} · ${orderClientName(editingOrder)}</div></div>
@@ -1343,7 +1413,19 @@ function renderSheet(){
       <label>${t('pickup_section')}</label>
       <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
     </div>` : ''}
-    ${(orderDraftMods.pickup || orderDraftMods.returnMethod==='delivery') ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${esc(orderDraftMods.pickupAddress||'')}" placeholder="${t('pickup_address_ph')}"></div>` : ''}
+    ${
+      // Manual entry (staff/walk-in) deliberately skips the free-text address
+      // field per 2026-09-19 client feedback — just the checkbox above.
+      // Client self-service and admin edit-order still collect it, since
+      // those need an address to actually route a pickup/delivery.
+      (!isManual && (orderDraftMods.pickup || orderDraftMods.returnMethod==='delivery')) ? `<div class="field"><label>${t('pickup_address_label')}</label><input type="text" id="orden-pickup-address" value="${esc(orderDraftMods.pickupAddress||'')}" placeholder="${t('pickup_address_ph')}"></div>` :
+      // Manual mode still auto-fills orderDraftMods.pickupAddress from the
+      // picked client's profile (see manualClientSelect.onchange above), with
+      // no editable field to show it in — so surface a read-only hint of
+      // what's actually on file and about to be submitted, so staff can spot
+      // a stale/missing address before saving instead of it going out silently.
+      (isManual && (orderDraftMods.pickup || orderDraftMods.returnMethod==='delivery') && orderDraftManualClientId) ? `<div class="item-price-hint">📍 ${t('pickup_address_on_file')}: ${esc(orderDraftMods.pickupAddress || '—')}</div>` : ''
+    }
 
     ${hidePrices ? '' : `
     <div class="order-total-preview">
@@ -1403,7 +1485,7 @@ function renderDesktopStaffShell(){
   return `
   <div class="ds-shell">
     <aside class="ds-sidebar">
-      <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('staff_panel')}</span></div>
+      ${renderBrandLogo(t('staff_panel'))}
       <nav class="ds-nav">${tabs.map(tb=>`<button data-stafftab="${tb}" class="${staffTab===tb?'active':''}">${tabIcons[tb]} ${tabLabels[tb]}</button>`).join('')}</nav>
       <div class="ds-sidebar-foot">${t('signed_in_as')} ${t('tab_staff')}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
     </aside>
@@ -1510,6 +1592,11 @@ function renderStaffOrders(){
   }
   const counts = {}; ESTADOS.forEach(e=>counts[e]=db.orders.filter(o=>o.estado===e).length);
   const qfLabels = {'due-today':t('today_due'),'received-today':t('today_received'),'overdue':t('today_overdue'),'urgent':t('today_urgent'),'problems':t('today_problems'),'in-progress':t('today_progress'),'ready':t('today_ready')};
+  // Same-day orders grouped under one date header (2026-09-19 client
+  // feedback) — see groupOrdersByDay()/dayLabel() near isToday().
+  const ordersHtml = groupOrdersByDay(ordenes).map(g=>
+    `<div class="order-group-header">${dayLabel(g.sample)}${g.items.length>1?` · ${g.items.length} ${t('group_orders_count')}`:''}</div>${g.items.map(renderOrderCardStaff).join('')}`
+  ).join('');
   return `
     <button class="add-item" id="btn-log-order" style="border-color:var(--teal-dark);color:var(--teal-dark);">${t('log_order')}</button>
     ${staffQuickFilter ? `<div class="quick-chip">${t('filtered_by')} ${qfLabels[staffQuickFilter]}<button id="clear-quickfilter">✕</button></div>` : ''}
@@ -1524,7 +1611,7 @@ function renderStaffOrders(){
       <button data-filter="todos" class="${staffFilter==='todos'?'active':''}">${t('all')} (${db.orders.length})</button>
       ${ESTADOS.map(e=>`<button data-filter="${e}" class="${staffFilter===e?'active':''}">${statusLabel(e)} (${counts[e]})</button>`).join('')}
     </div>
-    ${ordenes.length===0 ? `<div class="empty-state"><div class="glyph">📋</div><h3>${t('no_orders_filter')}</h3><p>${t('no_orders_filter_sub')}</p></div>` : ordenes.map(renderOrderCardStaff).join('')}
+    ${ordenes.length===0 ? `<div class="empty-state"><div class="glyph">📋</div><h3>${t('no_orders_filter')}</h3><p>${t('no_orders_filter_sub')}</p></div>` : ordersHtml}
   `;
 }
 
@@ -1674,16 +1761,16 @@ function computeReports(){
 
   const totalOrders = db.orders.length;
   const firstOrderTs = totalOrders ? Math.min(...db.orders.map(o=>o.creado)) : Date.now();
-  const daysSinceFirst = Math.max(1, Math.ceil((Date.now()-firstOrderTs)/86400000));
+  const daysSinceFirst = Math.max(1, Math.ceil((Date.now()-firstOrderTs)/DAY_MS));
   const avgPerDay = (totalOrders/daysSinceFirst).toFixed(1);
   const avgPerWeek = (totalOrders/(daysSinceFirst/7)).toFixed(1);
   const avgTicket = totalOrders ? Math.round(revenueOf(db.orders)/totalOrders) : 0;
 
   const byClient = {};
   db.orders.forEach(o=>{ (byClient[o.userId]=byClient[o.userId]||[]).push(o); });
-  const newClients = db.users.filter(u=>(Date.now()-u.registeredAt) <= 30*86400000).length;
+  const newClients = db.users.filter(u=>(Date.now()-u.registeredAt) <= 30*DAY_MS).length;
   const recurringClients = Object.values(byClient).filter(arr=>arr.length>1).length;
-  const lostClients = Object.values(byClient).filter(arr=>(Date.now()-Math.max(...arr.map(o=>o.creado))) > 30*86400000).length;
+  const lostClients = Object.values(byClient).filter(arr=>(Date.now()-Math.max(...arr.map(o=>o.creado))) > 30*DAY_MS).length;
   const topClients = Object.entries(byClient).map(([uid,arr])=>({name:(db.users.find(u=>u.id===uid)||{}).name||uid, count:arr.length})).sort((a,b)=>b.count-a.count).slice(0,5);
 
   const serviceQty = {}; const categoryRevenue = {};
@@ -2079,7 +2166,7 @@ function renderDesktopAdminShell(){
   return `
   <div class="ds-shell">
     <aside class="ds-sidebar">
-      <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('admin_panel')}</span></div>
+      ${renderBrandLogo(t('admin_panel'))}
       <nav class="ds-nav">${tabs.map(tb=>`<button data-admintab="${tb}" class="${adminTab===tb?'active':''}">${tabIcons[tb]} ${tabLabels[tb]}</button>`).join('')}</nav>
       <div class="ds-sidebar-foot">${t('signed_in_as')} ${t('tab_admin')}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
     </aside>
@@ -2426,7 +2513,13 @@ function bindEvents(){
     const comentarios = document.getElementById('orden-comentarios').value.trim();
     if(!fecha){ toast(t('err_pick_date')); return; }
     if(orderDraftItems.some(it=>it.tipo==='other' && !it.desc.trim())){ toast(t('err_other_desc')); return; }
-    if(db.settings.pickupEnabled && orderDraftMods.pickup && !orderDraftMods.pickupAddress.trim()){ toast(t('err_pickup_address')); return; }
+    // Manual orders don't show/collect a free-text pickup address (client
+    // feedback, 2026-09-19: "just a checkbox, don't make me type the
+    // address") — staff already have the client's address on file if one was
+    // selected (see manualClientSelect.onchange above), or handle it by
+    // phone for walk-ins, so this required-field check only applies to the
+    // client self-service and admin edit flows, which still render the field.
+    if(sheetMode!=='manual' && db.settings.pickupEnabled && orderDraftMods.pickup && !orderDraftMods.pickupAddress.trim()){ toast(t('err_pickup_address')); return; }
 
     const itemsPayload = orderDraftItems.map(it=>({
       product_id: it.tipo, qty: it.cant, price_override: null, desc: it.desc || null
