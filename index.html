@@ -177,10 +177,16 @@
        this now-desktop-sized dialog still read as small, mobile-derived
        controls against the much larger 640px card — bump them to a desktop
        scale and give <select> a custom chevron since the browser's default
-       arrow looks undersized here too. (These are already higher-specificity
-       than the base `input,select,textarea` rule, so no body.is-desktop
-       prefix is needed here — only the bare `.sheet` selector above collided.) */
-    .sheet h2{font-size:22px;}
+       arrow looks undersized here too. Most of these are already
+       higher-specificity than their base-rule counterparts (input/select/
+       textarea, item-row select/qty-input/button), so no body.is-desktop
+       prefix is needed for those. `.sheet h2` is the exception: an
+       identical, unconditional `.sheet h2{font-size:20px;...}` rule exists
+       later in the stylesheet (mobile default) at the same specificity, so
+       it needs the same body.is-desktop scoping as the outer `.sheet` fix
+       above or it silently loses the cascade tie the same way — caught by
+       adversarial review 2026-09-20 before this shipped. */
+    body.is-desktop .sheet h2{font-size:22px;}
     .sheet label{font-size:13px;}
     .sheet input,.sheet select,.sheet textarea{padding:13px 16px;font-size:16px;border-radius:10px;}
     .sheet select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23565f68' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px;}
