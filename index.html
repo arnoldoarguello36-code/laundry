@@ -835,6 +835,15 @@ function activeProductsClientId(){
 // a combination of their items plus every generic item meant for everyone
 // else. Clients with no exclusive products of their own see the shared
 // catalog as before (owner_client_id null).
+// One deliberate exception: the shared "Other garment" row (id==='other')
+// is always included even for a client on an exclusive catalog. "Other" is
+// a universal free-text/quote-pending item (see the it.tipo==='other'
+// checks throughout this file — description input, quote-pending price
+// hint, submit validation) rather than a per-client catalog entry; giving
+// a contract client their own separate "other"-like product under a
+// different id would silently lose all of that behavior, since product id
+// is a primary key and those checks match the literal string 'other'.
+// HSN and Hvammur's exclusive catalogs both rely on this (2026-09-20).
 // This is a client-side convenience filter only — the real enforcement is
 // the order_items_insert_client RLS policy (staff_only_products /
 // client_scoped_products migrations), which rejects a client-originated
@@ -862,7 +871,7 @@ function activeProducts(){
   const hasExclusiveCatalog = hasExclusiveCatalogFor(forClientId);
   return [...db.products]
     .filter(visibleNow)
-    .filter(p=> hasExclusiveCatalog ? p.ownerClientId===forClientId : !p.ownerClientId)
+    .filter(p=> hasExclusiveCatalog ? (p.ownerClientId===forClientId || p.id==='other') : !p.ownerClientId)
     .sort((a,b)=>a.sortOrder-b.sortOrder);
 }
 function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }

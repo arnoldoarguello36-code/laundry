@@ -224,3 +224,69 @@ test('hasExclusiveCatalogFor: respects the staffOnly visibility gate per mode, s
   sb.sheetMode = 'manual';
   assert.equal(sb.hasExclusiveCatalogFor('staffonly-client'), true, 'same product is visible to staff in manual mode');
 });
+
+// --- HSN / Hvammur exclusive catalogs (2026-09-20) --------------------
+// Real contract clients, each restricted to exactly 4 client-specific
+// products plus the shared "Other garment" item (id='other'). Kept on a
+// separate fixture from PRODUCTS above so these tests don't couple to (or
+// risk destabilizing) the generic-mechanism fixture already covered.
+// "Other garment" is deliberately the SHARED id='other' row, not a
+// per-client duplicate — see the comment above activeProducts() in
+// index.html for why (it.tipo==='other' is hardcoded throughout the app
+// for free-text description / quote-pending price / submit validation,
+// and product id is a primary key, so a client-owned "other"-like row
+// under a different id would silently lose that behavior).
+const CONTRACT_PRODUCTS = [
+  // sortOrder is high so "Other garment" sorts last, as it does in the
+  // live shared catalog today (a catch-all item belongs at the end of the
+  // dropdown, not spliced in front of a client's real product list).
+  { id:'other', key:'other', en:'Other garment', is:'Annað', active:true, staffOnly:false, sortOrder:9999, ownerClientId:null },
+  { id:'hsn_general_laundry', key:'hsn_general_laundry', en:'General Laundry', is:'Almennur þvottur', active:true, staffOnly:true, sortOrder:3001, ownerClientId:'hsn' },
+  { id:'hsn_yellow_tagged', key:'hsn_yellow_tagged', en:'Yellow-tagged laundry', is:'Gulmerktur þvottur', active:true, staffOnly:true, sortOrder:3002, ownerClientId:'hsn' },
+  { id:'hsn_uniform_shirts', key:'hsn_uniform_shirts', en:'Uniform Shirts', is:'Einkennisskyrtur', active:true, staffOnly:true, sortOrder:3003, ownerClientId:'hsn' },
+  { id:'hsn_uniform_trousers', key:'hsn_uniform_trousers', en:'Uniform Trousers', is:'Einkennisbuxur', active:true, staffOnly:true, sortOrder:3004, ownerClientId:'hsn' },
+  { id:'hvammur_general_laundry', key:'hvammur_general_laundry', en:'General Laundry', is:'Almennur þvottur', active:true, staffOnly:true, sortOrder:3005, ownerClientId:'hvammur' },
+  { id:'hvammur_yellow_tagged', key:'hvammur_yellow_tagged', en:'Yellow-tagged laundry', is:'Gulmerktur þvottur', active:true, staffOnly:true, sortOrder:3006, ownerClientId:'hvammur' },
+  { id:'hvammur_uniform_shirts', key:'hvammur_uniform_shirts', en:'Uniform Shirts', is:'Einkennisskyrtur', active:true, staffOnly:true, sortOrder:3007, ownerClientId:'hvammur' },
+  { id:'hvammur_uniform_trousers', key:'hvammur_uniform_trousers', en:'Uniform Trousers', is:'Einkennisbuxur', active:true, staffOnly:true, sortOrder:3008, ownerClientId:'hvammur' },
+];
+
+test('HSN manual order: dropdown is exactly General Laundry, Yellow-tagged laundry, Uniform Shirts, Uniform Trousers, Other garment', () => {
+  const sb = loadProducts();
+  sb.db = { products: CONTRACT_PRODUCTS };
+  sb.sheetMode = 'manual';
+  sb.orderDraftManualClientId = 'hsn';
+  const keys = sb.activeProducts().map(p=>p.key);
+  assert.deepEqual(keys, ['hsn_general_laundry', 'hsn_yellow_tagged', 'hsn_uniform_shirts', 'hsn_uniform_trousers', 'other']);
+});
+
+test('Hvammur manual order: dropdown is exactly General Laundry, Yellow-tagged laundry, Uniform Shirts, Uniform Trousers, Other garment', () => {
+  const sb = loadProducts();
+  sb.db = { products: CONTRACT_PRODUCTS };
+  sb.sheetMode = 'manual';
+  sb.orderDraftManualClientId = 'hvammur';
+  const keys = sb.activeProducts().map(p=>p.key);
+  assert.deepEqual(keys, ['hvammur_general_laundry', 'hvammur_yellow_tagged', 'hvammur_uniform_shirts', 'hvammur_uniform_trousers', 'other']);
+});
+
+test('HSN never sees Hvammur\'s exclusive items (and vice versa), only the shared "other" item is common', () => {
+  const sb = loadProducts();
+  sb.db = { products: CONTRACT_PRODUCTS };
+  sb.sheetMode = 'manual';
+  sb.orderDraftManualClientId = 'hsn';
+  const hsnKeys = sb.activeProducts().map(p=>p.key);
+  assert.ok(!hsnKeys.some(k=>k.startsWith('hvammur_')), 'HSN dropdown must not include any hvammur_* product');
+
+  sb.orderDraftManualClientId = 'hvammur';
+  const hvammurKeys = sb.activeProducts().map(p=>p.key);
+  assert.ok(!hvammurKeys.some(k=>k.startsWith('hsn_')), 'Hvammur dropdown must not include any hsn_* product');
+});
+
+test('a client with no exclusive catalog still sees only the shared catalog (no unintended "other" duplication logic)', () => {
+  const sb = loadProducts();
+  sb.db = { products: CONTRACT_PRODUCTS };
+  sb.sheetMode = 'manual';
+  sb.orderDraftManualClientId = 'plain-client-with-no-exclusives';
+  const keys = sb.activeProducts().map(p=>p.key);
+  assert.deepEqual(keys, ['other']);
+});
