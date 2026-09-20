@@ -533,6 +533,7 @@ const I18N = {
     manual_badge:"MANUAL", select_existing_client:"Existing client", or_type_name:"Or type a client / location name",
     walkin_client_ph:"E.g. Hotel Húsavík — Reception", err_manual_client:"Select a client or type a name",
     manual_order_logged:"Order logged",
+    cart_reset_own_catalog:"Cart items reset — {name} has their own product catalog",
 
     edit_order:"✎ Edit order", edit_order_title:"Edit order",
     edit_order_sub:"Update items, quantities, prices, or delivery details for this order.",
@@ -689,6 +690,7 @@ const I18N = {
     manual_badge:"HANDVIRKT", select_existing_client:"Núverandi viðskiptavinur", or_type_name:"Eða skrifaðu nafn viðskiptavinar / staðsetningar",
     walkin_client_ph:"T.d. Hótel Húsavík — Móttaka", err_manual_client:"Veldu viðskiptavin eða skrifaðu nafn",
     manual_order_logged:"Pöntun skráð",
+    cart_reset_own_catalog:"Vörur í körfu endurstilltar — {name} er með eigin vörulista",
 
     edit_order:"✎ Breyta pöntun", edit_order_title:"Breyta pöntun",
     edit_order_sub:"Uppfærðu vörur, magn, verð eða afhendingarupplýsingar fyrir þessa pöntun.",
@@ -838,16 +840,26 @@ function activeProductsClientId(){
 // client_scoped_products migrations), which rejects a client-originated
 // insert referencing a staff-only or someone-else's-exclusive product
 // regardless of what the UI shows.
+// Shared by activeProducts() below and the manual-order client-switch
+// handler (manualClientSelect.onchange) — the latter needs to know
+// *before* re-deriving the cart whether the newly-picked client is about to
+// trigger the exclusive-catalog swap, so it can explain a cart reset to
+// staff instead of leaving it silent (TODOS.md, 2026-09-20 finding).
+// Must only count exclusives that would actually be visible under the
+// current mode's staffOnly gate too, not just active ones. Otherwise a
+// client whose sole exclusive product is staffOnly-only still gets swapped
+// onto the exclusive catalog in client self-service mode, where staffOnly
+// products are filtered out below — leaving an empty list that crashes
+// every activeProducts()[0] call site.
+function hasExclusiveCatalogFor(clientId){
+  if(!clientId) return false;
+  const visibleNow = p => p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit');
+  return db.products.some(p=>p.ownerClientId===clientId && visibleNow(p));
+}
 function activeProducts(){
   const forClientId = activeProductsClientId();
   const visibleNow = p => p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit');
-  // hasExclusiveCatalog must only count exclusives that would actually be
-  // visible under the current mode's staffOnly gate too, not just active
-  // ones. Otherwise a client whose sole exclusive product is staffOnly-only
-  // still gets swapped onto the exclusive catalog in client self-service
-  // mode, where staffOnly products are filtered out below — leaving an
-  // empty list that crashes every activeProducts()[0] call site.
-  const hasExclusiveCatalog = !!forClientId && db.products.some(p=>p.ownerClientId===forClientId && visibleNow(p));
+  const hasExclusiveCatalog = hasExclusiveCatalogFor(forClientId);
   return [...db.products]
     .filter(visibleNow)
     .filter(p=> hasExclusiveCatalog ? p.ownerClientId===forClientId : !p.ownerClientId)
@@ -2539,9 +2551,20 @@ function bindEvents(){
     // Switching clients mid-draft can leave an item pointing at a product
     // that was exclusive to the *previous* client and is no longer valid for
     // the new one — fall back those items to the first still-valid product
-    // rather than silently keeping an invisible selection.
+    // rather than silently keeping an invisible selection. When the newly
+    // picked client has their own exclusive catalog, this can invalidate
+    // every shared-catalog item in the cart at once (not just cross-client
+    // exclusives), since the shared catalog is no longer merged in for them
+    // — surface a toast so staff aren't left wondering why their cart just
+    // changed (TODOS.md, 2026-09-20 finding).
     const validKeys = new Set(activeProducts().map(p=>p.key));
+    const resetCount = orderDraftItems.filter(it=>!validKeys.has(it.tipo)).length;
     orderDraftItems.forEach(it=>{ if(!validKeys.has(it.tipo)) it.tipo = activeProducts()[0].key; });
+    if(resetCount>0 && hasExclusiveCatalogFor(orderDraftManualClientId)){
+      const client = db.users.find(u=>u.id===orderDraftManualClientId);
+      const clientName = client ? client.name : '';
+      toast(t('cart_reset_own_catalog').replace('{name}', clientName));
+    }
     render();
   };
   const manualClientName = document.getElementById('manual-client-name');

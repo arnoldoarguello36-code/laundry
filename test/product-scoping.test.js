@@ -22,6 +22,7 @@ function loadProducts(){
   const source = readAppSource();
   const code = [
     extractFunction(source, 'activeProductsClientId'),
+    extractFunction(source, 'hasExclusiveCatalogFor'),
     extractFunction(source, 'activeProducts'),
   ].join('\n\n');
   const sandbox = {
@@ -169,4 +170,57 @@ test('client whose only exclusive product is staffOnly-only still gets the exclu
   sb.orderDraftManualClientId = 'staffonly-client';
   const keys = sb.activeProducts().map(p=>p.key);
   assert.deepEqual(keys, ['vip-only']);
+});
+
+// hasExclusiveCatalogFor is the extracted choke-point activeProducts() calls
+// internally, and is now ALSO called directly by manualClientSelect.onchange
+// (index.html) to decide whether to show a "cart reset" toast when switching
+// clients invalidates cart items. Covering it directly locks the contract
+// both call sites depend on.
+test('hasExclusiveCatalogFor: true for a client with an active, visible exclusive product', () => {
+  const sb = loadProducts();
+  sb.db = { products: PRODUCTS };
+  sb.sheetMode = 'manual';
+  assert.equal(sb.hasExclusiveCatalogFor('norra'), true);
+});
+
+test('hasExclusiveCatalogFor: false for a client with no exclusive products at all', () => {
+  const sb = loadProducts();
+  sb.db = { products: PRODUCTS };
+  sb.sheetMode = 'manual';
+  assert.equal(sb.hasExclusiveCatalogFor('plain-client-with-no-exclusives'), false);
+});
+
+test('hasExclusiveCatalogFor: false for a falsy/empty client id (e.g. manual order reset to "no client")', () => {
+  const sb = loadProducts();
+  sb.db = { products: PRODUCTS };
+  sb.sheetMode = 'manual';
+  assert.equal(sb.hasExclusiveCatalogFor(''), false);
+  assert.equal(sb.hasExclusiveCatalogFor(null), false);
+});
+
+test('hasExclusiveCatalogFor: false when the client\'s only exclusive product is inactive (dormant-client fallback)', () => {
+  const sb = loadProducts();
+  sb.db = {
+    products: [
+      ...PRODUCTS,
+      { id:'ghost', key:'ghost', en:'Deactivated exclusive', is:'Z', active:false, staffOnly:false, sortOrder:8, ownerClientId:'dormant-client' },
+    ],
+  };
+  sb.sheetMode = 'manual';
+  assert.equal(sb.hasExclusiveCatalogFor('dormant-client'), false);
+});
+
+test('hasExclusiveCatalogFor: respects the staffOnly visibility gate per mode, same as activeProducts()', () => {
+  const sb = loadProducts();
+  sb.db = {
+    products: [
+      ...PRODUCTS,
+      { id:'vip-only', key:'vip-only', en:'Staff-only exclusive', is:'Z', active:true, staffOnly:true, sortOrder:8, ownerClientId:'staffonly-client' },
+    ],
+  };
+  sb.sheetMode = 'client';
+  assert.equal(sb.hasExclusiveCatalogFor('staffonly-client'), false, 'staffOnly-only exclusive is invisible in client self-service mode');
+  sb.sheetMode = 'manual';
+  assert.equal(sb.hasExclusiveCatalogFor('staffonly-client'), true, 'same product is visible to staff in manual mode');
 });
