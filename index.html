@@ -158,11 +158,41 @@
        regular dialog plus pairing the manual-entry client fields onto one
        row (.sheet-row2, used only by renderSheet()'s manual-mode block)
        also addresses the paired "simplify the manual order form" ask by
-       cutting a row of vertical scrolling. --- */
-    .sheet{left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:640px;max-width:calc(100vw - 64px);max-height:85vh;border-radius:18px;padding:30px 34px 34px;}
+       cutting a row of vertical scrolling.
+       Scoped to `body.is-desktop .sheet` (not bare `.sheet`) on purpose:
+       the mobile-default `.sheet{...}` rule further down the stylesheet has
+       identical specificity (one class selector) and was declared AFTER this
+       block, so on a tie the later rule always won the cascade — the 640px
+       centered dialog below was silently dead code, and every screen this
+       size was still rendering the 480px mobile bottom-sheet. `body.is-desktop`
+       adds a second class to the selector, which outranks the mobile rule
+       regardless of source order (same pattern as `body.is-desktop #app`
+       above). Found and fixed 2026-09-20 while investigating the "menu is
+       too small" report — the modal was never actually resized on desktop. --- */
+    body.is-desktop .sheet{left:50%;top:50%;bottom:auto;transform:translate(-50%,-50%);width:640px;max-width:calc(100vw - 64px);max-height:85vh;border-radius:18px;padding:30px 34px 34px;background:var(--card);box-shadow:var(--shadow-lg);}
     .sheet-handle{display:none;}
     .sheet-row2{display:flex;gap:16px;}
     .sheet-row2 .field{flex:1;}
+    /* client feedback 2026-09-20: on a MacBook Air the dropdown/inputs inside
+       this now-desktop-sized dialog still read as small, mobile-derived
+       controls against the much larger 640px card — bump them to a desktop
+       scale and give <select> a custom chevron since the browser's default
+       arrow looks undersized here too. Most of these are already
+       higher-specificity than their base-rule counterparts (input/select/
+       textarea, item-row select/qty-input/button), so no body.is-desktop
+       prefix is needed for those. `.sheet h2` is the exception: an
+       identical, unconditional `.sheet h2{font-size:20px;...}` rule exists
+       later in the stylesheet (mobile default) at the same specificity, so
+       it needs the same body.is-desktop scoping as the outer `.sheet` fix
+       above or it silently loses the cascade tie the same way — caught by
+       adversarial review 2026-09-20 before this shipped. */
+    body.is-desktop .sheet h2{font-size:22px;}
+    .sheet label{font-size:13px;}
+    .sheet input,.sheet select,.sheet textarea{padding:13px 16px;font-size:16px;border-radius:10px;}
+    .sheet select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23565f68' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px;}
+    .sheet .item-row select{padding-right:34px;}
+    .sheet .item-row input.qty-input{flex:0 0 72px;}
+    .sheet .item-row button{height:48px;}
   }
 
   .topbar{padding:16px 18px 12px;display:flex;flex-direction:column;background:var(--card);position:sticky;top:0;z-index:20;gap:10px;box-shadow:var(--shadow-sm);}
