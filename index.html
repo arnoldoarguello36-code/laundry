@@ -826,6 +826,13 @@ function activeProductsClientId(){
 // client they're scoped to — staff/admin still see them when acting on
 // behalf of that specific client (manual/edit modes resolve the relevant
 // client via activeProductsClientId above), but not for any other client.
+// Once a client has ANY exclusive products of their own (e.g. Norðlenska's
+// dedicated linen list), the sheet shows ONLY that client's exclusive
+// catalog instead of merging it with the shared catalog — a contract
+// client with a custom product list orders off that list exclusively, not
+// a combination of their items plus every generic item meant for everyone
+// else. Clients with no exclusive products of their own see the shared
+// catalog as before (owner_client_id null).
 // This is a client-side convenience filter only — the real enforcement is
 // the order_items_insert_client RLS policy (staff_only_products /
 // client_scoped_products migrations), which rejects a client-originated
@@ -833,9 +840,10 @@ function activeProductsClientId(){
 // regardless of what the UI shows.
 function activeProducts(){
   const forClientId = activeProductsClientId();
+  const hasExclusiveCatalog = !!forClientId && db.products.some(p=>p.ownerClientId===forClientId && p.active);
   return [...db.products]
     .filter(p=>p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit'))
-    .filter(p=>!p.ownerClientId || p.ownerClientId===forClientId)
+    .filter(p=> hasExclusiveCatalog ? p.ownerClientId===forClientId : !p.ownerClientId)
     .sort((a,b)=>a.sortOrder-b.sortOrder);
 }
 function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-GB') + ' kr.'; }
