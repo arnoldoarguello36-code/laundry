@@ -840,9 +840,16 @@ function activeProductsClientId(){
 // regardless of what the UI shows.
 function activeProducts(){
   const forClientId = activeProductsClientId();
-  const hasExclusiveCatalog = !!forClientId && db.products.some(p=>p.ownerClientId===forClientId && p.active);
+  const visibleNow = p => p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit');
+  // hasExclusiveCatalog must only count exclusives that would actually be
+  // visible under the current mode's staffOnly gate too, not just active
+  // ones. Otherwise a client whose sole exclusive product is staffOnly-only
+  // still gets swapped onto the exclusive catalog in client self-service
+  // mode, where staffOnly products are filtered out below — leaving an
+  // empty list that crashes every activeProducts()[0] call site.
+  const hasExclusiveCatalog = !!forClientId && db.products.some(p=>p.ownerClientId===forClientId && visibleNow(p));
   return [...db.products]
-    .filter(p=>p.active && (!p.staffOnly || sheetMode==='manual' || sheetMode==='edit'))
+    .filter(visibleNow)
     .filter(p=> hasExclusiveCatalog ? p.ownerClientId===forClientId : !p.ownerClientId)
     .sort((a,b)=>a.sortOrder-b.sortOrder);
 }
@@ -1429,9 +1436,21 @@ function renderSheet(){
       // Mirrors the price_override column order_items already has and the
       // assign_price quoting flow admin uses elsewhere in this view.
       const priceField = isEdit ? `<div class="field"><label>${t('item_price_override_label')}</label><input type="number" min="0" class="qty-input" data-item-price="${i}" placeholder="${t('item_price_override_ph')}" value="${it.priceOverride!=null?it.priceOverride:''}"></div>` : '';
+      // Edit mode can be reopened on a legacy order whose item points at a
+      // product that's since fallen out of activeProducts() (e.g. the
+      // client gained an exclusive catalog after the order was placed). If
+      // we only render activeProducts() options, none matches it.tipo, so
+      // the browser silently highlights whatever option happens to be
+      // first — admin sees the wrong product "selected" while the stored
+      // data is untouched. Splice the item's actual product in as a
+      // dedicated option so the dropdown always reflects reality.
+      const dropdownOptions = activeProducts();
+      const optionList = dropdownOptions.some(s=>s.key===it.tipo)
+        ? dropdownOptions
+        : [...dropdownOptions, ...db.products.filter(p=>p.key===it.tipo)];
       return `
       <div class="item-row">
-        <select data-item-tipo="${i}">${activeProducts().map(s=>`<option value="${s.key}" ${s.key===it.tipo?'selected':''}>${s[lang]||s.en}</option>`).join('')}</select>
+        <select data-item-tipo="${i}">${optionList.map(s=>`<option value="${s.key}" ${s.key===it.tipo?'selected':''}>${s[lang]||s.en}</option>`).join('')}</select>
         <input type="number" min="1" class="qty-input" data-item-cant="${i}" value="${it.cant}">
         ${it.tipo!=='other' ? `<span class="qty-unit">${t('unit_abbr_'+p.unit)}</span>` : ''}
         ${it.tipo==='other' ? `<input type="text" class="other-input" data-item-desc="${i}" value="${esc(it.desc||'')}" placeholder="${t('other_ph')}">` : ''}

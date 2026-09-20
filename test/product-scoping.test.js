@@ -132,3 +132,41 @@ test('client whose only exclusive product is inactive falls back to the shared c
   const keys = sb.activeProducts().map(p=>p.key);
   assert.deepEqual(keys, ['shirt', 'towel', 'gull']);
 });
+
+// Regression: hasExclusiveCatalog must count a client's exclusives using the
+// SAME visibility gate (active + staffOnly-for-this-mode) as the returned
+// list, not just active. Otherwise a client whose only active exclusive
+// product is staffOnly-only still gets swapped onto "has an exclusive
+// catalog" in client self-service mode - where staffOnly items are always
+// filtered out - producing an empty activeProducts() list. Several call
+// sites do activeProducts()[0].key to seed a fresh draft item, which throws
+// on an empty array, crashing the "new order" flow for that client.
+test('client whose only exclusive product is staffOnly-only falls back to shared catalog in client self-service mode', () => {
+  const sb = loadProducts();
+  sb.db = {
+    products: [
+      ...PRODUCTS,
+      { id:'vip-only', key:'vip-only', en:'Staff-only exclusive', is:'Z', active:true, staffOnly:true, sortOrder:8, ownerClientId:'staffonly-client' },
+    ],
+  };
+  sb.sheetMode = 'client';
+  sb.session = { role:'client', userId:'staffonly-client', actualRole:'client' };
+  const keys = sb.activeProducts().map(p=>p.key);
+  assert.deepEqual(keys, ['shirt', 'towel']);
+});
+
+// Same fixture, manual mode: staffOnly items ARE visible to staff, so the
+// exclusive catalog swap should apply as normal there.
+test('client whose only exclusive product is staffOnly-only still gets the exclusive swap in manual/staff mode', () => {
+  const sb = loadProducts();
+  sb.db = {
+    products: [
+      ...PRODUCTS,
+      { id:'vip-only', key:'vip-only', en:'Staff-only exclusive', is:'Z', active:true, staffOnly:true, sortOrder:8, ownerClientId:'staffonly-client' },
+    ],
+  };
+  sb.sheetMode = 'manual';
+  sb.orderDraftManualClientId = 'staffonly-client';
+  const keys = sb.activeProducts().map(p=>p.key);
+  assert.deepEqual(keys, ['vip-only']);
+});
