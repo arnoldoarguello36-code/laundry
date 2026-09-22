@@ -1855,7 +1855,12 @@ function computeReports(){
   db.orders.forEach(o=>{
     o.items.forEach(it=>{
       const p = priceEntry(it.tipo);
-      const label = it.tipo==='other' ? (lang==='is'?'Annað':'Other') : (p[lang]||p.en);
+      // Was hardcoded to a literal "Other"/"Annað" here, diverging from the
+      // catalog name ("Other Garment") shown in the order-sheet dropdown
+      // (activeProducts() options use p[lang]||p.en) — staff saw the same
+      // item labeled two different ways depending on the screen. Use the
+      // catalog name everywhere, same as every other product.
+      const label = p[lang]||p.en;
       serviceQty[label] = (serviceQty[label]||0)+it.cant;
       const cost = computeItemCost(it);
       if(cost!==null) categoryRevenue[p.category] = (categoryRevenue[p.category]||0)+cost;
