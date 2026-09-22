@@ -2214,7 +2214,7 @@ function renderDesktopVolumeReport(){
 // so the tab list and badge-count logic (pending quotes, failed emails) live
 // in exactly one place.
 function computeAdminTabMeta(){
-  const tabs = ['reports','volume','quotes','products','pricing','orders','clients','failed'];
+  const tabs = ['reports','volume','quotes','products','pricing','orders','clients'];
   const pendingQuoteCount = db.orders.reduce((s,o)=>s+o.items.filter(it=>it.tipo==='other' && it.priceOverride==null).length,0);
   const failedEmailCount = db.emailLog.filter(e=>e.status==='failed').length;
   const tabLabels = {
