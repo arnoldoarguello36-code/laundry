@@ -438,6 +438,7 @@ const I18N = {
     pickup_address_label:"Pickup/delivery address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Address", pickup_address_on_file:"Address on file",
     reg_address_label:"Address (optional)", reg_address_ph:"Street, number, floor/apt...", reg_address_note:"We'll use this to prefill your pickup/delivery address on future orders. You can change it any time.",
     pickup_section:"Home pickup (optional)",
+    home_service_locked_note:"This client always gets home pickup & delivery — staff can't change it here.",
     return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
     service_disabled:"Not offered right now",
     tab_active:"Active", tab_history:"History", no_history_title:"No past orders yet", no_history_sub:"Delivered orders will show up here.",
@@ -595,6 +596,7 @@ const I18N = {
     pickup_address_label:"Heimilisfang fyrir sókn/heimsendingu", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang", pickup_address_on_file:"Heimilisfang á skrá",
     reg_address_label:"Heimilisfang (valfrjálst)", reg_address_ph:"Gata, númer, hæð/íbúð...", reg_address_note:"Við notum þetta til að forfylla heimilisfang fyrir sókn/heimsendingu í framtíðarpöntunum. Þú getur breytt því hvenær sem er.",
     pickup_section:"Sækja heim (valfrjálst)",
+    home_service_locked_note:"Þessi viðskiptavinur er alltaf með sókn og heimsendingu — starfsfólk getur ekki breytt því hér.",
     return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
     service_disabled:"Ekki í boði núna",
     tab_active:"Virkar", tab_history:"Fyrri pantanir", no_history_title:"Engar fyrri pantanir ennþá", no_history_sub:"Afhentar pantanir birtast hér.",
@@ -927,7 +929,16 @@ let db = {
 };
 
 function mapProfile(p){
-  return { id:p.id, name:p.name, email:p.email, phone:p.phone, address:p.address||'', registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, role: p.role, preferredLang: p.preferred_lang };
+  return { id:p.id, name:p.name, email:p.email, phone:p.phone, address:p.address||'', registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, forceHomeService: !!p.force_home_service, role: p.role, preferredLang: p.preferred_lang };
+}
+// HSN and Hvammur (2026-09-22): contract clients whose profiles.force_home_service
+// is true always use home pickup + home delivery on every order — staff can't
+// opt them out of it in the order sheet. Looked up by client id against
+// db.users (the mapped profiles list) rather than hardcoding either client's
+// id here, so it generalizes to any future client flagged the same way.
+function clientForcesHomeService(clientId){
+  const u = clientId && db.users.find(x=>x.id===clientId);
+  return !!(u && u.forceHomeService);
 }
 function mapProduct(p){
   return { id:p.id, key:p.id, en:p.name_en, is:p.name_is, price: p.price===null||p.price===undefined ? null : Number(p.price), unit:p.unit, category:p.category, active:p.active, sortOrder:p.sort_order, staffOnly: !!p.staff_only, ownerClientId: p.owner_client_id || null };
@@ -1425,6 +1436,14 @@ function renderSheet(){
   const isManualLike = isManual || isEdit;
   const hidePrices = session.role==='staff';
   const editingOrder = isEdit ? db.orders.find(o=>o.id===editingOrderId) : null;
+  // HSN/Hvammur-style locked clients: return-method/pickup are forced and
+  // disabled below, not just pre-checked, per the "staff cannot move it"
+  // requirement (2026-09-22). homeServiceClientId resolves to whichever
+  // client this draft actually belongs to per mode — manual mode reads the
+  // in-progress picker, edit mode reads the order being edited (client
+  // reassignment is out of scope in edit mode, see the edit-order handler).
+  const homeServiceClientId = isManual ? orderDraftManualClientId : (isEdit && editingOrder ? editingOrder.userId : null);
+  const homeServiceLocked = clientForcesHomeService(homeServiceClientId);
   return `
   <div class="sheet-backdrop ${sheetOpen?'open':''}" id="sheet-backdrop"></div>
   <div class="sheet ${sheetOpen?'open':''}" id="sheet">
@@ -1481,14 +1500,15 @@ function renderSheet(){
 
     <label class="checkbox-row"><input type="checkbox" id="orden-urgent" ${orderDraftMods.urgent?'checked':''}> ${t('opt_urgent')} <span class="fee">+${db.settings.expressPercent}%</span></label>
 
+    ${homeServiceLocked ? `<div class="item-price-hint">🔒 ${t('home_service_locked_note')}</div>` : ''}
     <label>${t('return_method')}</label>
-    <label class="checkbox-row"><input type="radio" name="return-method" value="store" ${orderDraftMods.returnMethod==='store'?'checked':''}> ${t('opt_return_store')} <span class="fee">${lang==='is'?'ókeypis':'free'}</span></label>
-    <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${!db.settings.deliveryEnabled?'disabled':''}> ${t('opt_return_delivery')} <span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span></label>
+    <label class="checkbox-row"><input type="radio" name="return-method" value="store" ${orderDraftMods.returnMethod==='store'?'checked':''} ${homeServiceLocked?'disabled':''}> ${t('opt_return_store')} <span class="fee">${lang==='is'?'ókeypis':'free'}</span></label>
+    <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${(!db.settings.deliveryEnabled||homeServiceLocked)?'disabled':''}> ${t('opt_return_delivery')} <span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span></label>
 
     ${db.settings.pickupEnabled ? `
     <div class="pickup-section">
       <label>${t('pickup_section')}</label>
-      <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
+      <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''} ${homeServiceLocked?'disabled':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
     </div>` : ''}
     ${
       // Manual entry (staff/walk-in) deliberately skips the free-text address
@@ -2547,6 +2567,12 @@ function bindEvents(){
     orderEditOriginalItems = o.items.map(it=>({ id:it.id, tipo:it.tipo, cant:it.cant, desc:it.desc||'', priceOverride: it.priceOverride==null?null:it.priceOverride }));
     orderDraftItems = orderEditOriginalItems.map(it=>({...it}));
     orderDraftMods = {urgent:o.urgent, returnMethod:o.returnMethod||'store', pickup:o.pickup, pickupAddress:o.pickupAddress||''};
+    // HSN/Hvammur-style locked clients always get home pickup+delivery, even
+    // when reopening a legacy order that predates the lock (see
+    // clientForcesHomeService above renderSheet disables the controls, but
+    // the underlying state must already be correct or a save-without-touching
+    // those fields would persist the old, unforced values).
+    if(clientForcesHomeService(o.userId)){ orderDraftMods.pickup = true; orderDraftMods.returnMethod = 'delivery'; }
     orderDraftFecha = o.fecha||'';
     orderDraftComentarios = o.comentarios||'';
     sheetOpen = true; render();
@@ -2561,6 +2587,12 @@ function bindEvents(){
     // fired when staff pick an existing client for a manual order — re-render
     // needed so the (shared) address field reflects the new default value.
     orderDraftMods.pickupAddress = clientAddressById(orderDraftManualClientId);
+    // HSN/Hvammur-style locked clients (see clientForcesHomeService above
+    // mapProfile) always get home pickup+delivery — force it here so the
+    // draft state is correct even though renderSheet() also disables the
+    // controls, since the onchange handlers below never fire on disabled
+    // inputs and can't be relied on to keep the state in sync themselves.
+    if(clientForcesHomeService(orderDraftManualClientId)){ orderDraftMods.pickup = true; orderDraftMods.returnMethod = 'delivery'; }
     // Switching clients mid-draft can leave an item pointing at a product
     // that was exclusive to the *previous* client and is no longer valid for
     // the new one — fall back those items to the first still-valid product
