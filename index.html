@@ -89,7 +89,7 @@
     .ds-topbar-actions{display:flex;align-items:center;gap:14px;}
     .ds-new-order-btn{width:auto;padding:11px 20px;font-size:14px;}
 
-    /* --- T5: admin desktop shell — card-list tabs (orders/clients/quotes/failed)
+    /* --- T5: admin desktop shell — card-list tabs (orders/clients/quotes)
        reuse the mobile card markup as-is, laid out as a responsive grid instead
        of a single stacked column; controls above the list (add buttons, filter
        bars, banners, inline edit forms) span the full width. --- */
@@ -573,8 +573,6 @@ const I18N = {
     confirm_email_sent:"Account created — check your email to confirm before signing in.",
     err_role_mismatch:"That login isn't valid for this account type", err_generic:"Something went wrong — please try again",
     preferred_lang_label:"Email language", lang_option_is:"Íslenska", lang_option_en:"English",
-    tab_failed_emails:"Failed emails", no_failed_emails_title:"No failed emails",
-    no_failed_emails_sub:"Every order/status/price email has sent successfully."
   },
   is: {
     brand_name:"Þvottafélagið", brand_tag:"Hafðu það hreint",
@@ -731,8 +729,6 @@ const I18N = {
     confirm_email_sent:"Aðgangur stofnaður — athugaðu tölvupóstinn til að staðfesta áður en þú skráir þig inn.",
     err_role_mismatch:"Þessi innskráning gildir ekki fyrir þessa tegund aðgangs", err_generic:"Eitthvað fór úrskeiðis — reyndu aftur",
     preferred_lang_label:"Tungumál tölvupósts", lang_option_is:"Íslenska", lang_option_en:"English",
-    tab_failed_emails:"Ósendir tölvupóstar", no_failed_emails_title:"Engir ósendir tölvupóstar",
-    no_failed_emails_sub:"Allir pöntunar-/stöðu-/verð-tölvupóstar hafa sendst."
   }
 };
 let lang = 'en';
@@ -1023,9 +1019,9 @@ async function loadDataForSession(){
   // list for staff/admin. A plain client needs their own row present in
   // db.users for the "Hi, {name}" greeting in renderClienteView().
   await Promise.all([loadOrders(), loadUsers()]);
-  // email_log is staff/admin-only per RLS (T8's failed-email admin panel and
-  // the staff "emails" tab both read db.emailLog) — no point fetching it for
-  // a plain client, who'd get an RLS-empty result anyway.
+  // email_log is staff/admin-only per RLS (the staff "emails" tab reads
+  // db.emailLog) — no point fetching it for a plain client, who'd get an
+  // RLS-empty result anyway.
   if(session.actualRole === 'staff' || session.actualRole === 'admin'){
     await loadEmailLog();
   }
@@ -2211,18 +2207,15 @@ function renderDesktopVolumeReport(){
 
 /* ============ ADMIN ============ */
 // Shared by renderAdminView() (mobile) and renderDesktopAdminShell() (desktop)
-// so the tab list and badge-count logic (pending quotes, failed emails) live
-// in exactly one place.
+// so the tab list and badge-count logic (pending quotes) live in exactly one place.
 function computeAdminTabMeta(){
   const tabs = ['reports','volume','quotes','products','pricing','orders','clients'];
   const pendingQuoteCount = db.orders.reduce((s,o)=>s+o.items.filter(it=>it.tipo==='other' && it.priceOverride==null).length,0);
-  const failedEmailCount = db.emailLog.filter(e=>e.status==='failed').length;
   const tabLabels = {
     reports:t('reports_tab'), volume:t('tab_volume'), quotes:t('tab_quotes')+(pendingQuoteCount?` (${pendingQuoteCount})`:''),
-    products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab'),
-    failed:t('tab_failed_emails')+(failedEmailCount?` (${failedEmailCount})`:'')
+    products:t('tab_products'), pricing:t('tab_pricing'), orders:t('orders_tab'), clients:t('clients_tab')
   };
-  return { tabs, tabLabels, pendingQuoteCount, failedEmailCount };
+  return { tabs, tabLabels, pendingQuoteCount };
 }
 function renderAdminView(){
   const { tabs, tabLabels } = computeAdminTabMeta();
@@ -2236,7 +2229,6 @@ function renderAdminView(){
       : adminTab==='products' ? renderAdminProducts()
       : adminTab==='pricing' ? renderAdminPricing()
       : adminTab==='orders' ? renderStaffOrders()
-      : adminTab==='failed' ? renderAdminFailedEmails()
       : renderStaffClients()}
   </div>
   <div class="bottomnav">
@@ -2254,16 +2246,15 @@ function renderAdminView(){
 // grid CSS, not from forking the render functions themselves.
 function renderDesktopAdminShell(){
   const { tabs, tabLabels } = computeAdminTabMeta();
-  const tabIcons = {reports:'📊', volume:'📦', quotes:'💬', products:'🧾', pricing:'💰', orders:'🧺', clients:'👥', failed:'⚠️'};
+  const tabIcons = {reports:'📊', volume:'📦', quotes:'💬', products:'🧾', pricing:'💰', orders:'🧺', clients:'👥'};
   const content = adminTab==='reports' ? `<div class="admin-banner">${t('admin_intro')}</div>${renderDesktopReports()}`
     : adminTab==='volume' ? renderDesktopVolumeReport()
     : adminTab==='quotes' ? renderAdminQuotes()
     : adminTab==='products' ? renderAdminProducts()
     : adminTab==='pricing' ? renderAdminPricing()
     : adminTab==='orders' ? renderStaffOrders()
-    : adminTab==='failed' ? renderAdminFailedEmails()
     : renderStaffClients();
-  const cardTabs = ['orders','clients','quotes','failed'];
+  const cardTabs = ['orders','clients','quotes'];
   const formTabs = ['products','pricing'];
   const wrapClass = cardTabs.includes(adminTab) ? 'ds-content-cards' : formTabs.includes(adminTab) ? 'ds-content-form' : '';
   return `
@@ -2281,14 +2272,6 @@ function renderDesktopAdminShell(){
       <div class="ds-content ${wrapClass}">${content}</div>
     </main>
   </div>`;
-}
-
-function renderAdminFailedEmails(){
-  const failed = db.emailLog.filter(e=>e.status==='failed');
-  return `
-    ${failed.length===0 ? `<div class="empty-state"><div class="glyph">✅</div><h3>${t('no_failed_emails_title')}</h3><p>${t('no_failed_emails_sub')}</p></div>` :
-    failed.map(e=>`<div class="email-card"><div class="email-head"><span class="email-to">${e.to}</span><span class="email-time">${fmtDateTime(e.ts)}</span></div><div class="email-subject">${e.subject}</div><div class="email-body">${e.body}</div><div class="email-sent-tag" style="background:var(--danger);">FAILED</div></div>`).join('')}
-  `;
 }
 
 function productEditFormHtml(p){
