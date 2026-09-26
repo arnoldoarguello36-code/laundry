@@ -457,6 +457,8 @@ const I18N = {
     rep_volume_start:"Start date", rep_volume_end:"End date", rep_volume_client:"Client",
     rep_volume_all_clients:"All clients", rep_volume_day:"Day", rep_volume_total:"Total",
     rep_volume_export:"Export to Excel",
+    rep_volume_product:"Product", rep_volume_price:"Price (ISK)", rep_volume_qty:"Qty", rep_volume_amount:"Amount (ISK)",
+    rep_volume_subtotal:"Subtotal", rep_volume_vat:"VAT (24%)", rep_volume_total_vat:"Total incl. VAT",
     billing_summary:"Billing summary", billing_summary_sub:"ISK breakdown by category for the selected date range.",
     billing_transportes:"Transport (delivery + pickup)", billing_total:"Total",
     billing_pending_note:"item(s) awaiting a price — excluded from the total above",
@@ -613,6 +615,8 @@ const I18N = {
     rep_volume_start:"Upphafsdagur", rep_volume_end:"Lokadagur", rep_volume_client:"Viðskiptavinur",
     rep_volume_all_clients:"Allir viðskiptavinir", rep_volume_day:"Dagur", rep_volume_total:"Samtals",
     rep_volume_export:"Flytja út í Excel",
+    rep_volume_product:"Vara", rep_volume_price:"Verð (kr.)", rep_volume_qty:"Magn", rep_volume_amount:"Upphæð (kr.)",
+    rep_volume_subtotal:"Samtala", rep_volume_vat:"VSK (24%)", rep_volume_total_vat:"Samtala m. VSK",
     billing_summary:"Reikningayfirlit", billing_summary_sub:"Sundurliðun í krónum eftir flokki fyrir valið tímabil.",
     billing_transportes:"Flutningar (heimsending + sókn)", billing_total:"Samtals",
     billing_pending_note:"liður bíður verðs — ekki talinn með í samtölu hér að ofan",
@@ -2106,6 +2110,73 @@ async function exportVolumeExcel(){
   totalsRow.getCell(1).value = t('rep_volume_total');
   r.activeProductIds.forEach((id,i)=> totalsRow.getCell(2+i).value = r.totals[id] || 0);
   totalsRow.eachCell(cell=>{ cell.font = { bold:true }; cell.border = { top:{style:'thin'} }; });
+
+  // Pricing / VAT breakdown — second section below the quantity table.
+  // Prices are stored VAT-exclusive; VSK (24%) is added on top here.
+  const krFmt = '#,##0" kr."';
+  const pricedProductIds = r.activeProductIds.filter(id=>{
+    const p = db.products.find(x=>x.id===id);
+    return p && typeof p.price === 'number';
+  });
+  const hasUnpriced = r.activeProductIds.some(id=>{
+    const p = db.products.find(x=>x.id===id);
+    return !p || typeof p.price !== 'number';
+  });
+
+  if(pricedProductIds.length){
+    rowNum += 2;
+    const priceHeaderRow = ws.getRow(rowNum++);
+    [t('rep_volume_product'), t('rep_volume_price'), t('rep_volume_qty'), t('rep_volume_amount')].forEach((label,i)=>{
+      priceHeaderRow.getCell(1+i).value = label;
+    });
+    priceHeaderRow.eachCell(cell=>{
+      cell.font = { bold:true, color:{argb:'FFFFFFFF'} };
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1F3864'} };
+      cell.alignment = { horizontal:'center' };
+    });
+
+    let subtotal = 0;
+    pricedProductIds.forEach(id=>{
+      const p = db.products.find(x=>x.id===id);
+      const qty = r.totals[id] || 0;
+      const amount = p.price * qty;
+      subtotal += amount;
+      const row = ws.getRow(rowNum++);
+      row.getCell(1).value = productLabel(id);
+      row.getCell(2).value = p.price;
+      row.getCell(2).numFmt = krFmt;
+      row.getCell(3).value = qty;
+      row.getCell(4).value = amount;
+      row.getCell(4).numFmt = krFmt;
+    });
+
+    const vat = subtotal * 0.24;
+    const totalVat = subtotal + vat;
+
+    const subtotalRow = ws.getRow(rowNum++);
+    subtotalRow.getCell(1).value = t('rep_volume_subtotal');
+    subtotalRow.getCell(4).value = subtotal;
+    subtotalRow.getCell(4).numFmt = krFmt;
+    subtotalRow.eachCell(cell=>{ cell.font = { bold:true }; cell.border = { top:{style:'thin'} }; });
+
+    const vatRow = ws.getRow(rowNum++);
+    vatRow.getCell(1).value = t('rep_volume_vat');
+    vatRow.getCell(4).value = vat;
+    vatRow.getCell(4).numFmt = krFmt;
+
+    const totalVatRow = ws.getRow(rowNum++);
+    totalVatRow.getCell(1).value = t('rep_volume_total_vat');
+    totalVatRow.getCell(4).value = totalVat;
+    totalVatRow.getCell(4).numFmt = krFmt;
+    totalVatRow.eachCell(cell=>{ cell.font = { bold:true }; cell.border = { top:{style:'thin'} }; });
+
+    if(hasUnpriced){
+      rowNum++;
+      const noteRow = ws.getRow(rowNum++);
+      noteRow.getCell(1).value = t('billing_pending_note');
+      noteRow.getCell(1).font = { italic:true, size:9, color:{argb:'FF666666'} };
+    }
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
