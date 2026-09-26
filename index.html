@@ -394,6 +394,7 @@
   ::-webkit-scrollbar{display:none;}
 </style>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="supabase-config.js"></script>
 </head>
 <body>
@@ -455,7 +456,7 @@ const I18N = {
     rep_volume:"Volume processed", rep_volume_sub:"Kilos/units processed per day — billing basis for contract clients.",
     rep_volume_start:"Start date", rep_volume_end:"End date", rep_volume_client:"Client",
     rep_volume_all_clients:"All clients", rep_volume_day:"Day", rep_volume_total:"Total",
-    rep_volume_export:"Export to Excel (CSV)",
+    rep_volume_export:"Export to Excel",
     billing_summary:"Billing summary", billing_summary_sub:"ISK breakdown by category for the selected date range.",
     billing_transportes:"Transport (delivery + pickup)", billing_total:"Total",
     billing_pending_note:"item(s) awaiting a price — excluded from the total above",
@@ -611,7 +612,7 @@ const I18N = {
     rep_volume:"Unnið magn", rep_volume_sub:"Kíló/stykki unnin á dag — grunnur fyrir reikningagerð samningsviðskiptavina.",
     rep_volume_start:"Upphafsdagur", rep_volume_end:"Lokadagur", rep_volume_client:"Viðskiptavinur",
     rep_volume_all_clients:"Allir viðskiptavinir", rep_volume_day:"Dagur", rep_volume_total:"Samtals",
-    rep_volume_export:"Flytja út í Excel (CSV)",
+    rep_volume_export:"Flytja út í Excel",
     billing_summary:"Reikningayfirlit", billing_summary_sub:"Sundurliðun í krónum eftir flokki fyrir valið tímabil.",
     billing_transportes:"Flutningar (heimsending + sókn)", billing_total:"Samtals",
     billing_pending_note:"liður bíður verðs — ekki talinn með í samtölu hér að ofan",
@@ -1917,7 +1918,6 @@ function computeReports(){
    for contract clients like HSN Husavik and Hvammur, but works for any
    client) ---- */
 function fmtQty(v, unit){ return unit==='kg' ? (Math.round(v*10)/10).toLocaleString(lang==='is'?'is-IS':'en-GB') : Math.round(v).toLocaleString(lang==='is'?'is-IS':'en-GB'); }
-function csvEscape(v){ const s=String(v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
 
 function computeVolumeReport(startISO, endISO, clientId){
   const start = new Date(startISO+'T00:00:00');
@@ -2013,7 +2013,7 @@ function renderBillingSummary(){
 }
 
 function renderVolumeReport(){
-  const contractClients = db.users.filter(u=>u.isContract);
+  const allClients = db.users.filter(u=>u.role==='client').sort((a,b)=>a.name.localeCompare(b.name));
   const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
   const productLabel = (id)=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${t('unit_'+p.unit)})` : id; };
   return `
@@ -2027,7 +2027,7 @@ function renderVolumeReport(){
         <label>${t('rep_volume_client')}</label>
         <select id="vol-client">
           <option value="all" ${volumeClientFilter==='all'?'selected':''}>${t('rep_volume_all_clients')}</option>
-          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+          ${allClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
         </select>
       </div>
       ${r.activeProductIds.length===0 ? `<p class="chart-sub">${t('rep_no_data')}</p>` : `
@@ -2042,24 +2042,77 @@ function renderVolumeReport(){
           </tfoot>
         </table>
       </div>
-      <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
+      ${volumeClientFilter!=='all' ? `<button class="add-item" id="vol-export">${t('rep_volume_export')}</button>` : ''}
       `}
     </div>
     ${volumeClientFilter!=='all' ? renderBillingSummary() : ''}
   `;
 }
 
-function exportVolumeCSV(){
+/* ---- Per-client volume export as a real .xlsx workbook (not flat CSV) so
+   it can carry the laundry logo, a styled header, and the selected date
+   range — matching the hand-built "Delivery report" sheet staff already
+   circulate. Only reachable when a specific client is selected (button is
+   hidden for the 'all clients' aggregate, see renderVolumeReport). Opening
+   this in Excel and using File > Save As / Print > Save as PDF is the path
+   to a PDF copy — no PDF generation is done in-app. ---- */
+async function exportVolumeExcel(){
   const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
   if(r.activeProductIds.length===0){ toast(t('rep_no_data')); return; }
-  const header = [t('rep_volume_day'), ...r.activeProductIds.map(id=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${p.unit})` : id; })];
-  const rows = r.days.map(day=>[day.date, ...r.activeProductIds.map(id=> day.values[id]||0)]);
-  const totalsRow = [t('rep_volume_total'), ...r.activeProductIds.map(id=> r.totals[id]||0)];
-  const csv = [header, ...rows, totalsRow].map(row=>row.map(csvEscape).join(',')).join('\r\n');
-  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const client = db.users.find(u=>u.id===volumeClientFilter);
+  const productLabel = (id)=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${t('unit_'+p.unit)})` : id; };
+  const fmtFullDate = (iso)=> new Date(iso+'T00:00:00').toLocaleDateString(lang==='is'?'is-IS':'en-GB');
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Volume');
+  const colCount = 1 + r.activeProductIds.length;
+  ws.getColumn(1).width = 14;
+  for(let c=2;c<=colCount;c++) ws.getColumn(c).width = 18;
+
+  try{
+    const resp = await fetch('icons/icon-192.png');
+    const buf = await resp.arrayBuffer();
+    const imgId = wb.addImage({ buffer: buf, extension: 'png' });
+    ws.addImage(imgId, { tl:{col:0,row:0}, ext:{width:56,height:56} });
+  }catch(e){ /* logo is decorative — export is still valid without it */ }
+
+  ws.mergeCells(1,2,1,colCount);
+  ws.getCell(1,2).value = 'Þvottafélagið';
+  ws.getCell(1,2).font = { bold:true, size:14 };
+  ws.mergeCells(2,2,2,colCount);
+  ws.getCell(2,2).value = client ? client.name : t('rep_volume_all_clients');
+  ws.getCell(2,2).font = { bold:true, size:11 };
+  ws.mergeCells(3,2,3,colCount);
+  ws.getCell(3,2).value = `${fmtFullDate(volumeStart)} \u2013 ${fmtFullDate(volumeEnd)}`;
+  ws.getCell(3,2).font = { size:10, color:{argb:'FF666666'} };
+
+  const headerRow = ws.getRow(5);
+  headerRow.getCell(1).value = t('rep_volume_day');
+  r.activeProductIds.forEach((id,i)=> headerRow.getCell(2+i).value = productLabel(id));
+  headerRow.eachCell(cell=>{
+    cell.font = { bold:true, color:{argb:'FFFFFFFF'} };
+    cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1F3864'} };
+    cell.alignment = { horizontal:'center' };
+  });
+
+  let rowNum = 6;
+  r.days.forEach(day=>{
+    const row = ws.getRow(rowNum++);
+    row.getCell(1).value = fmtFullDate(day.date);
+    r.activeProductIds.forEach((id,i)=> row.getCell(2+i).value = day.values[id] || 0);
+  });
+
+  const totalsRow = ws.getRow(rowNum);
+  totalsRow.getCell(1).value = t('rep_volume_total');
+  r.activeProductIds.forEach((id,i)=> totalsRow.getCell(2+i).value = r.totals[id] || 0);
+  totalsRow.eachCell(cell=>{ cell.font = { bold:true }; cell.border = { top:{style:'thin'} }; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `thvottafelagid-volumen_${volumeStart}_${volumeEnd}.csv`;
+  const clientSlug = client ? client.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') : 'todos';
+  a.href = url; a.download = `thvottafelagid-volumen_${clientSlug}_${volumeStart}_${volumeEnd}.xlsx`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
@@ -2169,7 +2222,7 @@ function renderDesktopReports(){
 }
 
 function renderDesktopVolumeReport(){
-  const contractClients = db.users.filter(u=>u.isContract);
+  const allClients = db.users.filter(u=>u.role==='client').sort((a,b)=>a.name.localeCompare(b.name));
   const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
   const productLabel = (id)=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${t('unit_'+p.unit)})` : id; };
   return `
@@ -2183,7 +2236,7 @@ function renderDesktopVolumeReport(){
         <label>${t('rep_volume_client')}</label>
         <select id="vol-client">
           <option value="all" ${volumeClientFilter==='all'?'selected':''}>${t('rep_volume_all_clients')}</option>
-          ${contractClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+          ${allClients.map(c=>`<option value="${c.id}" ${volumeClientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
         </select>
       </div>
       ${r.activeProductIds.length===0 ? `<p class="sub">${t('rep_no_data')}</p>` : `
@@ -2198,7 +2251,7 @@ function renderDesktopVolumeReport(){
           </tfoot>
         </table>
       </div>
-      <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
+      ${volumeClientFilter!=='all' ? `<button class="add-item" id="vol-export">${t('rep_volume_export')}</button>` : ''}
       `}
     </div>
     ${volumeClientFilter!=='all' ? renderBillingSummary() : ''}
@@ -2731,7 +2784,7 @@ function bindEvents(){
   const volStart = document.getElementById('vol-start'); if(volStart) volStart.onchange = (e)=>{ volumeStart=e.target.value; render(); };
   const volEnd = document.getElementById('vol-end'); if(volEnd) volEnd.onchange = (e)=>{ volumeEnd=e.target.value; render(); };
   const volClient = document.getElementById('vol-client'); if(volClient) volClient.onchange = (e)=>{ volumeClientFilter=e.target.value; render(); };
-  const volExport = document.getElementById('vol-export'); if(volExport) volExport.onclick = exportVolumeCSV;
+  const volExport = document.getElementById('vol-export'); if(volExport) volExport.onclick = exportVolumeExcel;
   app.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ staffFilter=b.dataset.filter; staffQuickFilter=null; render(); });
   app.querySelectorAll('[data-view-client]').forEach(b=>b.onclick=()=>{ staffClientFilter=b.dataset.viewClient; staffFilter='todos'; staffQuickFilter=null; if(session.role==='staff') staffTab='orders'; else adminTab='orders'; render(); });
 
