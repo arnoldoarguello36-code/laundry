@@ -927,7 +927,11 @@ function computeOrderTotals(items, mods){
 // re-render — there's no local optimistic mutation of `db` anymore.
 let db = {
   users: [], products: [], settings: { expressPercent:0, deliveryFee:0, pickupFee:0, discountPercent:0, deliveryEnabled:true, pickupEnabled:true },
-  orders: [], emailLog: []
+  orders: [], emailLog: [],
+  // Cursor for loadOrdersIncremental() below — the max orders.updated_at seen
+  // across every fetch so far (full or incremental). null until the first
+  // full loadOrders() completes.
+  ordersLastSync: null
 };
 
 function mapProfile(p){
@@ -995,14 +999,65 @@ async function loadSettings(){
   if(error){ console.error('loadSettings', error); toast(t('err_generic')); return; }
   db.settings = mapSettings(data);
 }
+// Shared select shape for both order-loading paths below - kept as one
+// constant so the join list can't silently drift between the full load and
+// the incremental one.
+const ORDER_SELECT = '*, order_items(id, product_id, qty, price_override, desc)';
+// Safety margin subtracted from the cursor before every incremental-sync
+// query (see loadOrdersIncremental below). Postgres assigns a row's
+// updated_at at transaction *start*, not commit, so two concurrent writes
+// can commit out of timestamp order - without this margin, a poll landing
+// between the two commits could advance db.ordersLastSync past the slower
+// transaction's updated_at before that row lands, silently skipping it from
+// every open tab's auto-refresh until the next full page load/login.
+// Re-fetching this small overlap window is harmless: loadOrdersIncremental's
+// merge-by-id treats an already-seen row as a no-op (overwritten with the
+// same freshly-mapped values).
+const SYNC_CURSOR_SAFETY_MARGIN_MS = 2000;
 async function loadOrders(){
   // RLS scopes this automatically: clients only ever get their own rows back,
   // staff/admin get everything — no manual client_id filter needed.
+  // Full reload — only meant to run once per session (see loadDataForSession
+  // below). Every *recurring* reload (polling, post-mutation refresh) should
+  // use loadOrdersIncremental() instead so the app isn't re-pulling the whole
+  // orders table over and over — see 20261002100700's header for why.
   const { data, error } = await sb.from('orders')
-    .select('*, order_items(id, product_id, qty, price_override, desc)')
+    .select(ORDER_SELECT)
     .order('created_at', {ascending:false});
   if(error){ console.error('loadOrders', error); toast(t('err_generic')); return; }
   db.orders = (data||[]).map(mapOrder);
+  db.ordersLastSync = (data && data.length) ? data.reduce((max,r)=> r.updated_at>max ? r.updated_at : max, data[0].updated_at) : new Date().toISOString();
+}
+// Incremental counterpart to loadOrders(): fetches only rows whose
+// updated_at moved past the last-seen cursor (set by whichever of loadOrders/
+// loadOrdersIncremental ran most recently) and merges them into db.orders in
+// place, instead of re-fetching every order every time. Safe to call after
+// any mutation (insert or update) since both set/bump updated_at — a brand
+// new order is just as "changed since the cursor" as an edited one. Falls
+// back to a full loadOrders() if there's no cursor yet (shouldn't normally
+// happen — loadDataForSession always runs the full load first — but this
+// keeps it safe to call standalone, e.g. from a future call site).
+async function loadOrdersIncremental(){
+  if(!db.ordersLastSync) return loadOrders();
+  // Query from (cursor - margin), not the raw cursor — see
+  // SYNC_CURSOR_SAFETY_MARGIN_MS above. The cursor itself (db.ordersLastSync)
+  // still only ever advances to the true max updated_at seen below; only the
+  // query's lower bound is widened, so a row that lands just behind a faster
+  // concurrent commit still gets picked up on the next poll instead of being
+  // silently skipped forever.
+  const queryFloor = new Date(new Date(db.ordersLastSync).getTime() - SYNC_CURSOR_SAFETY_MARGIN_MS).toISOString();
+  const { data, error } = await sb.from('orders')
+    .select(ORDER_SELECT)
+    .gt('updated_at', queryFloor)
+    .order('updated_at', {ascending:true});
+  if(error){ console.error('loadOrdersIncremental', error); toast(t('err_generic')); return; }
+  if(!data || !data.length) return;
+  data.forEach(row=>{
+    const mapped = mapOrder(row);
+    const idx = db.orders.findIndex(o=>o.id===mapped.id);
+    if(idx>=0) db.orders[idx] = mapped; else db.orders.unshift(mapped);
+  });
+  db.ordersLastSync = data[data.length-1].updated_at;
 }
 async function loadUsers(){
   // `db.users` is (and always was) "clients only" — staff/admin accounts
@@ -1037,7 +1092,7 @@ function startPolling(){
   setInterval(async ()=>{
     if(!session.role || session.role === 'client') return;
     if(sheetOpen || addingClient || editingClientId || addingProduct || editingProductId) return;
-    await Promise.all([loadOrders(), loadEmailLog()]);
+    await Promise.all([loadOrdersIncremental(), loadEmailLog()]);
     render();
   }, 20000);
 }
@@ -2837,7 +2892,7 @@ function bindEvents(){
         if(itemsErr) throw itemsErr;
         toast(t('order_sent'));
       }
-      await loadOrders();
+      await loadOrdersIncremental();
       sheetOpen = false; editingOrderId = null; orderEditOriginalItems = []; render();
     } catch(e){ console.error('submit order', e); toast(t('err_generic')); }
   };
@@ -2947,21 +3002,21 @@ function bindEvents(){
     try{
       const { error } = await sb.rpc('advance_order_status', { p_order_id: b.dataset.advance });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('order_updated'));
+      await loadOrdersIncremental(); render(); toast(t('order_updated'));
     } catch(e){ console.error('advance_order_status', e); toast(t('err_generic')); }
   });
   app.querySelectorAll('[data-hold]').forEach(b=>b.onclick=async ()=>{
     try{
       const { error } = await sb.rpc('flag_problem', { p_order_id: b.dataset.hold, p_flagged: true });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('note_added'));
+      await loadOrdersIncremental(); render(); toast(t('note_added'));
     } catch(e){ console.error('flag_problem', e); toast(t('err_generic')); }
   });
   app.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=async ()=>{
     try{
       const { error } = await sb.rpc('flag_problem', { p_order_id: b.dataset.resolve, p_flagged: false });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('issue_resolved'));
+      await loadOrdersIncremental(); render(); toast(t('issue_resolved'));
     } catch(e){ console.error('flag_problem', e); toast(t('err_generic')); }
   });
   app.querySelectorAll('[data-note-submit]').forEach(b=>b.onclick=async ()=>{
@@ -2971,7 +3026,7 @@ function bindEvents(){
     try{
       const { error } = await sb.rpc('add_order_note', { p_order_id: id, p_note: val });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('note_added'));
+      await loadOrdersIncremental(); render(); toast(t('note_added'));
     } catch(e){ console.error('add_order_note', e); toast(t('err_generic')); }
   });
 
@@ -3094,7 +3149,7 @@ function bindEvents(){
       if(error) throw error;
       delete quotePriceDrafts[itemId];
       toast(t('price_assigned'));
-      await loadOrders(); render();
+      await loadOrdersIncremental(); render();
     } catch(e){ console.error('assign_item_price', e); toast(t('err_generic')); }
   });
 }
