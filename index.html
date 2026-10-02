@@ -544,6 +544,7 @@ const I18N = {
     edit_order_sub:"Update items, quantities, prices, or delivery details for this order.",
     save_order_changes:"Save changes", order_edited:"Order updated",
     item_price_override_label:"Price override (ISK)", item_price_override_ph:"Leave blank for catalog price",
+    delivered_at_label:"Delivered at", delivered_at_hint:"Leave blank if this order hasn't actually been delivered yet.",
 
     rep_revenue_client:"Revenue by client", rep_revenue_client_sub:"Useful to reconcile against contract paperwork",
 
@@ -702,6 +703,7 @@ const I18N = {
     edit_order_sub:"Uppfærðu vörur, magn, verð eða afhendingarupplýsingar fyrir þessa pöntun.",
     save_order_changes:"Vista breytingar", order_edited:"Pöntun uppfærð",
     item_price_override_label:"Sérverð (kr.)", item_price_override_ph:"Skildu eftir autt fyrir listaverð",
+    delivered_at_label:"Afhent þann", delivered_at_hint:"Skildu eftir autt ef pöntunin hefur í raun ekki verið afhent enn.",
 
     rep_revenue_client:"Tekjur eftir viðskiptavini", rep_revenue_client_sub:"Gagnlegt til að stemma af á móti pappírsskráningu",
 
@@ -743,6 +745,23 @@ function t(key){ return I18N[lang][key] ?? key; }
 const ESTADOS = ["en-cola","aceptado","en-proceso","listo","entregado"];
 function statusLabel(e){ return t('status')[e]; }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
+// datetime-local <input> helpers (admin delivered_at edit, see
+// orderDraftDeliveredAt below). datetime-local wants/returns local wall-clock
+// time with no timezone info ("YYYY-MM-DDTHH:mm"), so this converts to/from
+// that using the browser's local timezone — intentional: admin is reading/
+// setting a wall-clock time off a paper log or their own memory of "when did
+// this actually get delivered," not a UTC instant.
+function toDatetimeLocalValue(ts){
+  if(ts==null) return '';
+  const d = new Date(ts);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromDatetimeLocalValue(v){
+  if(!v) return null;
+  const d = new Date(v); // no 'Z' suffix → parsed as local time, matching toDatetimeLocalValue above
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
 function isToday(ts){ return new Date(ts).toDateString() === new Date().toDateString(); }
 function isOverdue(o){ return o.fecha < todayISO() && o.estado !== 'entregado'; }
 const DAY_MS = 86400000;
@@ -1122,6 +1141,16 @@ let orderDraftFecha = '';
 // out an in-progress edit — see the data-item-desc/data-item-price fields
 // below for the same no-render-on-input pattern.
 let orderDraftComentarios = '';
+// Admin-only edit mode addition (2026-10-02 request): lets admin correct
+// delivered_at directly (e.g. a backfilled/backdated order, or a status
+// bulk-advance that stamped the wrong wall-clock time — see
+// 20261002100300/20261002100400's header for exactly that failure mode).
+// Bound to a <input type="datetime-local">, so this holds a local
+// "YYYY-MM-DDTHH:mm" string (see toDatetimeLocalValue/fromDatetimeLocalValue
+// below for the conversion to/from the epoch-ms the rest of the app uses) —
+// empty string means "clear delivered_at back to null". Only ever read/sent
+// in sheetMode==='edit'; every other mode leaves it untouched.
+let orderDraftDeliveredAt = '';
 // Admin-only edit mode (issue #3): id of the order currently being edited via
 // the sheet, mirrors the editingClientId pattern below. orderEditOriginalItems
 // is a snapshot of that order's items *as loaded*, kept separate from
@@ -1593,6 +1622,10 @@ function renderSheet(){
     </div>`}
 
     <div class="field"><label>${isManualLike ? t('req_date_manual') : t('req_date')}</label><input type="date" id="orden-fecha" value="${orderDraftFecha}" ${isManualLike ? '' : `min="${todayISO()}"`}></div>
+    ${(isEdit && editingOrder && editingOrder.estado==='entregado') ? `
+    <div class="field"><label>${t('delivered_at_label')}</label><input type="datetime-local" id="orden-delivered-at" value="${esc(orderDraftDeliveredAt)}">
+      <div class="item-price-hint">${t('delivered_at_hint')}</div>
+    </div>` : ''}
     <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}">${esc(orderDraftComentarios||'')}</textarea></div>
     <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${isEdit ? t('save_order_changes') : t('submit_order')}</button>
     <button class="btn btn-ghost" id="btn-cancel-orden" style="width:100%;">${t('cancel')}</button>
@@ -2698,6 +2731,7 @@ function bindEvents(){
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:clientOwnAddress()};
     orderDraftFecha = '';
     orderDraftComentarios = '';
+    orderDraftDeliveredAt = '';
     editingOrderId = null; orderEditOriginalItems = [];
     sheetOpen = true; render();
   };
@@ -2713,6 +2747,7 @@ function bindEvents(){
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     orderDraftFecha = todayISO();
     orderDraftComentarios = '';
+    orderDraftDeliveredAt = '';
     editingOrderId = null; orderEditOriginalItems = [];
     sheetOpen = true; render();
   };
@@ -2738,6 +2773,7 @@ function bindEvents(){
     if(clientForcesHomeService(o.userId)){ orderDraftMods.pickup = true; orderDraftMods.returnMethod = 'delivery'; }
     orderDraftFecha = o.fecha||'';
     orderDraftComentarios = o.comentarios||'';
+    orderDraftDeliveredAt = toDatetimeLocalValue(o.deliveredAt);
     sheetOpen = true; render();
   });
   const btnCancel = document.getElementById('btn-cancel-orden'); if(btnCancel) btnCancel.onclick=()=>{ sheetOpen=false; editingOrderId=null; orderEditOriginalItems=[]; render(); };
@@ -2781,6 +2817,8 @@ function bindEvents(){
   if(ordenFecha) ordenFecha.oninput = ()=>{ orderDraftFecha = ordenFecha.value; };
   const ordenComentarios = document.getElementById('orden-comentarios');
   if(ordenComentarios) ordenComentarios.oninput = ()=>{ orderDraftComentarios = ordenComentarios.value; };
+  const ordenDeliveredAt = document.getElementById('orden-delivered-at');
+  if(ordenDeliveredAt) ordenDeliveredAt.oninput = ()=>{ orderDraftDeliveredAt = ordenDeliveredAt.value; };
   app.querySelectorAll('input[name="return-method"]').forEach(el=>el.onchange=()=>{ orderDraftMods.returnMethod = el.value; render(); });
 
   const addItemBtn = document.getElementById('add-item-btn');
@@ -2841,12 +2879,31 @@ function bindEvents(){
         // fires. Diffs orderDraftItems against the orderEditOriginalItems
         // snapshot captured when the sheet was opened to decide which
         // order_items rows to update/insert/delete.
+        //
+        // delivered_at (2026-10-02 addition) is the one exception to "estado/
+        // timestamps aren't editable here" — admin can correct it directly
+        // (e.g. a backfilled order, or a status bulk-advance that stamped the
+        // wrong wall-clock time). Blank input → null (not delivered / clear
+        // the timestamp), not "leave unchanged" — the field always reflects
+        // and writes the current value, same as every other field in this form.
         if(session.role!=='admin' || !editingOrderId){ toast(t('err_generic')); return; }
+
+        // delivered_at is only ever shown/editable for estado==='entregado'
+        // orders (see renderSheet's gate on the same condition) - a pending/
+        // in-progress order has no real "delivered" timestamp to correct, so
+        // only include the field in the write when that's actually true.
+        // Re-checks the order's current estado here (not just trusting the
+        // hidden field was never touched) so this stays correct even if
+        // orderDraftDeliveredAt is ever repurposed/pre-filled for other modes.
+        const orderBeingEdited = db.orders.find(o=>o.id===editingOrderId);
+        const deliveredAtPatch = (orderBeingEdited && orderBeingEdited.estado==='entregado')
+          ? { delivered_at: fromDatetimeLocalValue(orderDraftDeliveredAt) } : {};
 
         const { error: orderUpdErr } = await sb.from('orders').update({
           fecha, comentarios: comentarios || null, urgent: orderDraftMods.urgent,
           return_method: orderDraftMods.returnMethod, pickup: orderDraftMods.pickup,
-          pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null
+          pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null,
+          ...deliveredAtPatch
         }).eq('id', editingOrderId);
         if(orderUpdErr) throw orderUpdErr;
 
