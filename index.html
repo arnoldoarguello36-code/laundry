@@ -544,6 +544,7 @@ const I18N = {
     edit_order_sub:"Update items, quantities, prices, or delivery details for this order.",
     save_order_changes:"Save changes", order_edited:"Order updated",
     item_price_override_label:"Price override (ISK)", item_price_override_ph:"Leave blank for catalog price",
+    delivered_at_label:"Delivered at", delivered_at_hint:"Leave blank if this order hasn't actually been delivered yet.",
 
     rep_revenue_client:"Revenue by client", rep_revenue_client_sub:"Useful to reconcile against contract paperwork",
 
@@ -702,6 +703,7 @@ const I18N = {
     edit_order_sub:"Uppfærðu vörur, magn, verð eða afhendingarupplýsingar fyrir þessa pöntun.",
     save_order_changes:"Vista breytingar", order_edited:"Pöntun uppfærð",
     item_price_override_label:"Sérverð (kr.)", item_price_override_ph:"Skildu eftir autt fyrir listaverð",
+    delivered_at_label:"Afhent þann", delivered_at_hint:"Skildu eftir autt ef pöntunin hefur í raun ekki verið afhent enn.",
 
     rep_revenue_client:"Tekjur eftir viðskiptavini", rep_revenue_client_sub:"Gagnlegt til að stemma af á móti pappírsskráningu",
 
@@ -743,6 +745,23 @@ function t(key){ return I18N[lang][key] ?? key; }
 const ESTADOS = ["en-cola","aceptado","en-proceso","listo","entregado"];
 function statusLabel(e){ return t('status')[e]; }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
+// datetime-local <input> helpers (admin delivered_at edit, see
+// orderDraftDeliveredAt below). datetime-local wants/returns local wall-clock
+// time with no timezone info ("YYYY-MM-DDTHH:mm"), so this converts to/from
+// that using the browser's local timezone — intentional: admin is reading/
+// setting a wall-clock time off a paper log or their own memory of "when did
+// this actually get delivered," not a UTC instant.
+function toDatetimeLocalValue(ts){
+  if(ts==null) return '';
+  const d = new Date(ts);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromDatetimeLocalValue(v){
+  if(!v) return null;
+  const d = new Date(v); // no 'Z' suffix → parsed as local time, matching toDatetimeLocalValue above
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
 function isToday(ts){ return new Date(ts).toDateString() === new Date().toDateString(); }
 function isOverdue(o){ return o.fecha < todayISO() && o.estado !== 'entregado'; }
 const DAY_MS = 86400000;
@@ -927,7 +946,11 @@ function computeOrderTotals(items, mods){
 // re-render — there's no local optimistic mutation of `db` anymore.
 let db = {
   users: [], products: [], settings: { expressPercent:0, deliveryFee:0, pickupFee:0, discountPercent:0, deliveryEnabled:true, pickupEnabled:true },
-  orders: [], emailLog: []
+  orders: [], emailLog: [],
+  // Cursor for loadOrdersIncremental() below — the max orders.updated_at seen
+  // across every fetch so far (full or incremental). null until the first
+  // full loadOrders() completes.
+  ordersLastSync: null
 };
 
 function mapProfile(p){
@@ -995,14 +1018,65 @@ async function loadSettings(){
   if(error){ console.error('loadSettings', error); toast(t('err_generic')); return; }
   db.settings = mapSettings(data);
 }
+// Shared select shape for both order-loading paths below - kept as one
+// constant so the join list can't silently drift between the full load and
+// the incremental one.
+const ORDER_SELECT = '*, order_items(id, product_id, qty, price_override, desc)';
+// Safety margin subtracted from the cursor before every incremental-sync
+// query (see loadOrdersIncremental below). Postgres assigns a row's
+// updated_at at transaction *start*, not commit, so two concurrent writes
+// can commit out of timestamp order - without this margin, a poll landing
+// between the two commits could advance db.ordersLastSync past the slower
+// transaction's updated_at before that row lands, silently skipping it from
+// every open tab's auto-refresh until the next full page load/login.
+// Re-fetching this small overlap window is harmless: loadOrdersIncremental's
+// merge-by-id treats an already-seen row as a no-op (overwritten with the
+// same freshly-mapped values).
+const SYNC_CURSOR_SAFETY_MARGIN_MS = 2000;
 async function loadOrders(){
   // RLS scopes this automatically: clients only ever get their own rows back,
   // staff/admin get everything — no manual client_id filter needed.
+  // Full reload — only meant to run once per session (see loadDataForSession
+  // below). Every *recurring* reload (polling, post-mutation refresh) should
+  // use loadOrdersIncremental() instead so the app isn't re-pulling the whole
+  // orders table over and over — see 20261002100700's header for why.
   const { data, error } = await sb.from('orders')
-    .select('*, order_items(id, product_id, qty, price_override, desc)')
+    .select(ORDER_SELECT)
     .order('created_at', {ascending:false});
   if(error){ console.error('loadOrders', error); toast(t('err_generic')); return; }
   db.orders = (data||[]).map(mapOrder);
+  db.ordersLastSync = (data && data.length) ? data.reduce((max,r)=> r.updated_at>max ? r.updated_at : max, data[0].updated_at) : new Date().toISOString();
+}
+// Incremental counterpart to loadOrders(): fetches only rows whose
+// updated_at moved past the last-seen cursor (set by whichever of loadOrders/
+// loadOrdersIncremental ran most recently) and merges them into db.orders in
+// place, instead of re-fetching every order every time. Safe to call after
+// any mutation (insert or update) since both set/bump updated_at — a brand
+// new order is just as "changed since the cursor" as an edited one. Falls
+// back to a full loadOrders() if there's no cursor yet (shouldn't normally
+// happen — loadDataForSession always runs the full load first — but this
+// keeps it safe to call standalone, e.g. from a future call site).
+async function loadOrdersIncremental(){
+  if(!db.ordersLastSync) return loadOrders();
+  // Query from (cursor - margin), not the raw cursor — see
+  // SYNC_CURSOR_SAFETY_MARGIN_MS above. The cursor itself (db.ordersLastSync)
+  // still only ever advances to the true max updated_at seen below; only the
+  // query's lower bound is widened, so a row that lands just behind a faster
+  // concurrent commit still gets picked up on the next poll instead of being
+  // silently skipped forever.
+  const queryFloor = new Date(new Date(db.ordersLastSync).getTime() - SYNC_CURSOR_SAFETY_MARGIN_MS).toISOString();
+  const { data, error } = await sb.from('orders')
+    .select(ORDER_SELECT)
+    .gt('updated_at', queryFloor)
+    .order('updated_at', {ascending:true});
+  if(error){ console.error('loadOrdersIncremental', error); toast(t('err_generic')); return; }
+  if(!data || !data.length) return;
+  data.forEach(row=>{
+    const mapped = mapOrder(row);
+    const idx = db.orders.findIndex(o=>o.id===mapped.id);
+    if(idx>=0) db.orders[idx] = mapped; else db.orders.unshift(mapped);
+  });
+  db.ordersLastSync = data[data.length-1].updated_at;
 }
 async function loadUsers(){
   // `db.users` is (and always was) "clients only" — staff/admin accounts
@@ -1037,7 +1111,7 @@ function startPolling(){
   setInterval(async ()=>{
     if(!session.role || session.role === 'client') return;
     if(sheetOpen || addingClient || editingClientId || addingProduct || editingProductId) return;
-    await Promise.all([loadOrders(), loadEmailLog()]);
+    await Promise.all([loadOrdersIncremental(), loadEmailLog()]);
     render();
   }, 20000);
 }
@@ -1067,6 +1141,16 @@ let orderDraftFecha = '';
 // out an in-progress edit — see the data-item-desc/data-item-price fields
 // below for the same no-render-on-input pattern.
 let orderDraftComentarios = '';
+// Admin-only edit mode addition (2026-10-02 request): lets admin correct
+// delivered_at directly (e.g. a backfilled/backdated order, or a status
+// bulk-advance that stamped the wrong wall-clock time — see
+// 20261002100300/20261002100400's header for exactly that failure mode).
+// Bound to a <input type="datetime-local">, so this holds a local
+// "YYYY-MM-DDTHH:mm" string (see toDatetimeLocalValue/fromDatetimeLocalValue
+// below for the conversion to/from the epoch-ms the rest of the app uses) —
+// empty string means "clear delivered_at back to null". Only ever read/sent
+// in sheetMode==='edit'; every other mode leaves it untouched.
+let orderDraftDeliveredAt = '';
 // Admin-only edit mode (issue #3): id of the order currently being edited via
 // the sheet, mirrors the editingClientId pattern below. orderEditOriginalItems
 // is a snapshot of that order's items *as loaded*, kept separate from
@@ -1538,6 +1622,10 @@ function renderSheet(){
     </div>`}
 
     <div class="field"><label>${isManualLike ? t('req_date_manual') : t('req_date')}</label><input type="date" id="orden-fecha" value="${orderDraftFecha}" ${isManualLike ? '' : `min="${todayISO()}"`}></div>
+    ${(isEdit && editingOrder && editingOrder.estado==='entregado') ? `
+    <div class="field"><label>${t('delivered_at_label')}</label><input type="datetime-local" id="orden-delivered-at" value="${esc(orderDraftDeliveredAt)}">
+      <div class="item-price-hint">${t('delivered_at_hint')}</div>
+    </div>` : ''}
     <div class="field"><label>${t('comments_opt')}</label><textarea id="orden-comentarios" rows="3" placeholder="${t('comments_ph')}">${esc(orderDraftComentarios||'')}</textarea></div>
     <button class="btn btn-primary" id="btn-submit-orden" style="width:100%;">${isEdit ? t('save_order_changes') : t('submit_order')}</button>
     <button class="btn btn-ghost" id="btn-cancel-orden" style="width:100%;">${t('cancel')}</button>
@@ -2643,6 +2731,7 @@ function bindEvents(){
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:clientOwnAddress()};
     orderDraftFecha = '';
     orderDraftComentarios = '';
+    orderDraftDeliveredAt = '';
     editingOrderId = null; orderEditOriginalItems = [];
     sheetOpen = true; render();
   };
@@ -2658,6 +2747,7 @@ function bindEvents(){
     orderDraftMods = {urgent:false, returnMethod:'store', pickup:false, pickupAddress:''};
     orderDraftFecha = todayISO();
     orderDraftComentarios = '';
+    orderDraftDeliveredAt = '';
     editingOrderId = null; orderEditOriginalItems = [];
     sheetOpen = true; render();
   };
@@ -2683,6 +2773,7 @@ function bindEvents(){
     if(clientForcesHomeService(o.userId)){ orderDraftMods.pickup = true; orderDraftMods.returnMethod = 'delivery'; }
     orderDraftFecha = o.fecha||'';
     orderDraftComentarios = o.comentarios||'';
+    orderDraftDeliveredAt = toDatetimeLocalValue(o.deliveredAt);
     sheetOpen = true; render();
   });
   const btnCancel = document.getElementById('btn-cancel-orden'); if(btnCancel) btnCancel.onclick=()=>{ sheetOpen=false; editingOrderId=null; orderEditOriginalItems=[]; render(); };
@@ -2726,6 +2817,8 @@ function bindEvents(){
   if(ordenFecha) ordenFecha.oninput = ()=>{ orderDraftFecha = ordenFecha.value; };
   const ordenComentarios = document.getElementById('orden-comentarios');
   if(ordenComentarios) ordenComentarios.oninput = ()=>{ orderDraftComentarios = ordenComentarios.value; };
+  const ordenDeliveredAt = document.getElementById('orden-delivered-at');
+  if(ordenDeliveredAt) ordenDeliveredAt.oninput = ()=>{ orderDraftDeliveredAt = ordenDeliveredAt.value; };
   app.querySelectorAll('input[name="return-method"]').forEach(el=>el.onchange=()=>{ orderDraftMods.returnMethod = el.value; render(); });
 
   const addItemBtn = document.getElementById('add-item-btn');
@@ -2786,12 +2879,31 @@ function bindEvents(){
         // fires. Diffs orderDraftItems against the orderEditOriginalItems
         // snapshot captured when the sheet was opened to decide which
         // order_items rows to update/insert/delete.
+        //
+        // delivered_at (2026-10-02 addition) is the one exception to "estado/
+        // timestamps aren't editable here" — admin can correct it directly
+        // (e.g. a backfilled order, or a status bulk-advance that stamped the
+        // wrong wall-clock time). Blank input → null (not delivered / clear
+        // the timestamp), not "leave unchanged" — the field always reflects
+        // and writes the current value, same as every other field in this form.
         if(session.role!=='admin' || !editingOrderId){ toast(t('err_generic')); return; }
+
+        // delivered_at is only ever shown/editable for estado==='entregado'
+        // orders (see renderSheet's gate on the same condition) - a pending/
+        // in-progress order has no real "delivered" timestamp to correct, so
+        // only include the field in the write when that's actually true.
+        // Re-checks the order's current estado here (not just trusting the
+        // hidden field was never touched) so this stays correct even if
+        // orderDraftDeliveredAt is ever repurposed/pre-filled for other modes.
+        const orderBeingEdited = db.orders.find(o=>o.id===editingOrderId);
+        const deliveredAtPatch = (orderBeingEdited && orderBeingEdited.estado==='entregado')
+          ? { delivered_at: fromDatetimeLocalValue(orderDraftDeliveredAt) } : {};
 
         const { error: orderUpdErr } = await sb.from('orders').update({
           fecha, comentarios: comentarios || null, urgent: orderDraftMods.urgent,
           return_method: orderDraftMods.returnMethod, pickup: orderDraftMods.pickup,
-          pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null
+          pickup_address: orderDraftMods.pickup ? (orderDraftMods.pickupAddress.trim() || null) : null,
+          ...deliveredAtPatch
         }).eq('id', editingOrderId);
         if(orderUpdErr) throw orderUpdErr;
 
@@ -2837,7 +2949,7 @@ function bindEvents(){
         if(itemsErr) throw itemsErr;
         toast(t('order_sent'));
       }
-      await loadOrders();
+      await loadOrdersIncremental();
       sheetOpen = false; editingOrderId = null; orderEditOriginalItems = []; render();
     } catch(e){ console.error('submit order', e); toast(t('err_generic')); }
   };
@@ -2947,21 +3059,21 @@ function bindEvents(){
     try{
       const { error } = await sb.rpc('advance_order_status', { p_order_id: b.dataset.advance });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('order_updated'));
+      await loadOrdersIncremental(); render(); toast(t('order_updated'));
     } catch(e){ console.error('advance_order_status', e); toast(t('err_generic')); }
   });
   app.querySelectorAll('[data-hold]').forEach(b=>b.onclick=async ()=>{
     try{
       const { error } = await sb.rpc('flag_problem', { p_order_id: b.dataset.hold, p_flagged: true });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('note_added'));
+      await loadOrdersIncremental(); render(); toast(t('note_added'));
     } catch(e){ console.error('flag_problem', e); toast(t('err_generic')); }
   });
   app.querySelectorAll('[data-resolve]').forEach(b=>b.onclick=async ()=>{
     try{
       const { error } = await sb.rpc('flag_problem', { p_order_id: b.dataset.resolve, p_flagged: false });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('issue_resolved'));
+      await loadOrdersIncremental(); render(); toast(t('issue_resolved'));
     } catch(e){ console.error('flag_problem', e); toast(t('err_generic')); }
   });
   app.querySelectorAll('[data-note-submit]').forEach(b=>b.onclick=async ()=>{
@@ -2971,7 +3083,7 @@ function bindEvents(){
     try{
       const { error } = await sb.rpc('add_order_note', { p_order_id: id, p_note: val });
       if(error) throw error;
-      await loadOrders(); render(); toast(t('note_added'));
+      await loadOrdersIncremental(); render(); toast(t('note_added'));
     } catch(e){ console.error('add_order_note', e); toast(t('err_generic')); }
   });
 
@@ -3094,7 +3206,7 @@ function bindEvents(){
       if(error) throw error;
       delete quotePriceDrafts[itemId];
       toast(t('price_assigned'));
-      await loadOrders(); render();
+      await loadOrdersIncremental(); render();
     } catch(e){ console.error('assign_item_price', e); toast(t('err_generic')); }
   });
 }
