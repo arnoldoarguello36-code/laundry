@@ -1,12 +1,12 @@
 'use strict';
 // E-series: verifies the pricing/VAT breakdown section appended to
-// exportVolumeExcel()'s Excel export. computeVolumeReport and
-// exportVolumeExcel are extracted verbatim from index.html and run in an
-// isolated vm context against a mock ExcelJS (records cell writes into
-// plain objects instead of touching the real xlsx writer), a mock
-// fetch/document/URL/Blob (the function's logo-fetch + anchor-click
-// download flow), and a stubbed t() that echoes the i18n key so cell
-// contents can be asserted without loading the full I18N table.
+// exportVolumeExcel()'s Excel export. computeVolumeReport, sanitizeSheetName,
+// fillVolumeSheet and exportVolumeExcel are extracted verbatim from
+// index.html and run in an isolated vm context against a mock ExcelJS
+// (records cell writes into plain objects instead of touching the real
+// xlsx writer), a mock fetch/document/URL/Blob (the function's logo-fetch +
+// anchor-click download flow), and a stubbed t() that echoes the i18n key
+// so cell contents can be asserted without loading the full I18N table.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -48,6 +48,8 @@ function loadExport(){
   // rather than loosening the shared extractor for one caller.
   const code = [
     extractFunction(source, 'computeVolumeReport'),
+    extractFunction(source, 'sanitizeSheetName'),
+    extractFunction(source, 'fillVolumeSheet'),
     'async ' + extractFunction(source, 'exportVolumeExcel'),
   ].join('\n\n');
   const sandbox = {
@@ -84,6 +86,8 @@ function order(id, items){
   return { id, userId:'u1', creado: IN_RANGE, items };
 }
 
+const CLIENT = { id:'u1', role:'client', name:'Client One' };
+
 function pricingRows(ws){
   // The pricing section's header row is the first row (after the quantity
   // table + a blank spacer) whose first cell equals the stubbed t() key
@@ -95,12 +99,12 @@ function pricingRows(ws){
 
 test('pricing/VAT section: amount = price × qty, VAT is 24% on top of net subtotal', async () => {
   const sb = loadExport();
-  sb.db = { orders: [ order('o1', [ {tipo:'sheet', cant:2}, {tipo:'shirt', cant:1} ]) ], products: PRODUCTS, users: [] };
+  sb.db = { orders: [ order('o1', [ {tipo:'sheet', cant:2}, {tipo:'shirt', cant:1} ]) ], products: PRODUCTS, users: [CLIENT] };
   sb.volumeStart = RANGE_START; sb.volumeEnd = RANGE_END; sb.volumeClientFilter = 'all';
 
   await sb.exportVolumeExcel();
 
-  const ws = sb.ExcelJS.lastWorkbook.worksheets['Volume'];
+  const ws = sb.ExcelJS.lastWorkbook.worksheets['Client One'];
   const { rowNums, headerRowNum } = pricingRows(ws);
   assert.ok(headerRowNum, 'expected a pricing section header row');
 
@@ -123,12 +127,12 @@ test('pricing/VAT section: amount = price × qty, VAT is 24% on top of net subto
 
 test('unpriced products (price===null) are excluded from the pricing section and flagged via a note', async () => {
   const sb = loadExport();
-  sb.db = { orders: [ order('o1', [ {tipo:'sheet', cant:1}, {tipo:'other', cant:5} ]) ], products: PRODUCTS, users: [] };
+  sb.db = { orders: [ order('o1', [ {tipo:'sheet', cant:1}, {tipo:'other', cant:5} ]) ], products: PRODUCTS, users: [CLIENT] };
   sb.volumeStart = RANGE_START; sb.volumeEnd = RANGE_END; sb.volumeClientFilter = 'all';
 
   await sb.exportVolumeExcel();
 
-  const ws = sb.ExcelJS.lastWorkbook.worksheets['Volume'];
+  const ws = sb.ExcelJS.lastWorkbook.worksheets['Client One'];
   const { rowNums, headerRowNum } = pricingRows(ws);
   const rows = rowNums.map(n => ws.rows[n]);
   const dataRows = rowNums.filter(n => n > headerRowNum).map(n => ws.rows[n]);
@@ -146,12 +150,12 @@ test('unpriced products (price===null) are excluded from the pricing section and
 
 test('all active products priced: no pending note is added', async () => {
   const sb = loadExport();
-  sb.db = { orders: [ order('o1', [ {tipo:'sheet', cant:1}, {tipo:'shirt', cant:1} ]) ], products: PRODUCTS, users: [] };
+  sb.db = { orders: [ order('o1', [ {tipo:'sheet', cant:1}, {tipo:'shirt', cant:1} ]) ], products: PRODUCTS, users: [CLIENT] };
   sb.volumeStart = RANGE_START; sb.volumeEnd = RANGE_END; sb.volumeClientFilter = 'all';
 
   await sb.exportVolumeExcel();
 
-  const ws = sb.ExcelJS.lastWorkbook.worksheets['Volume'];
+  const ws = sb.ExcelJS.lastWorkbook.worksheets['Client One'];
   const rows = Object.values(ws.rows);
   const noteRow = rows.find(r => r.cells[1] && r.cells[1].value === 'billing_pending_note');
   assert.equal(noteRow, undefined);
