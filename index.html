@@ -2134,39 +2134,46 @@ function renderVolumeReport(){
           </tfoot>
         </table>
       </div>
-      ${volumeClientFilter!=='all' ? `<button class="add-item" id="vol-export">${t('rep_volume_export')}</button>` : ''}
+      <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
       `}
     </div>
     ${volumeClientFilter!=='all' ? renderBillingSummary() : ''}
   `;
 }
 
-/* ---- Per-client volume export as a real .xlsx workbook (not flat CSV) so
-   it can carry the laundry logo, a styled header, and the selected date
-   range — matching the hand-built "Delivery report" sheet staff already
-   circulate. Only reachable when a specific client is selected (button is
-   hidden for the 'all clients' aggregate, see renderVolumeReport). Opening
-   this in Excel and using File > Save As / Print > Save as PDF is the path
-   to a PDF copy — no PDF generation is done in-app. ---- */
-async function exportVolumeExcel(){
-  const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
-  if(r.activeProductIds.length===0){ toast(t('rep_no_data')); return; }
-  const client = db.users.find(u=>u.id===volumeClientFilter);
+/* ---- Sheet tab names can't contain \ / ? * [ ] or exceed 31 chars; dedupe
+   suffixes (-2, -3, ...) guard against two clients truncating to the same
+   name (see exportVolumeExcel's per-client loop). ---- */
+function sanitizeSheetName(name, used){
+  const base = (name || 'Sheet').replace(/[\\\/\?\*\[\]:]/g,'').trim().slice(0,31) || 'Sheet';
+  let candidate = base, i = 2;
+  while(used.has(candidate)){
+    const suffix = '-'+i;
+    candidate = base.slice(0, 31-suffix.length) + suffix;
+    i++;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+/* ---- Fills one worksheet with a client's volume (quantity table) + priced
+   VAT breakdown. Shared by exportVolumeExcel's single-client path and its
+   'all clients' per-client-tab path. logoBuf is fetched once by the caller
+   and reused across every sheet rather than re-fetched per client. ---- */
+function fillVolumeSheet(wb, ws, client, r, logoBuf){
   const productLabel = (id)=>{ const p=db.products.find(x=>x.id===id); return p ? `${p[lang]||p.en} (${t('unit_'+p.unit)})` : id; };
   const fmtFullDate = (iso)=> new Date(iso+'T00:00:00').toLocaleDateString(lang==='is'?'is-IS':'en-GB');
 
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Volume');
   const colCount = 1 + r.activeProductIds.length;
   ws.getColumn(1).width = 14;
   for(let c=2;c<=colCount;c++) ws.getColumn(c).width = 18;
 
-  try{
-    const resp = await fetch('icons/icon-192.png');
-    const buf = await resp.arrayBuffer();
-    const imgId = wb.addImage({ buffer: buf, extension: 'png' });
-    ws.addImage(imgId, { tl:{col:0,row:0}, ext:{width:56,height:56} });
-  }catch(e){ /* logo is decorative — export is still valid without it */ }
+  if(logoBuf){
+    try{
+      const imgId = wb.addImage({ buffer: logoBuf, extension: 'png' });
+      ws.addImage(imgId, { tl:{col:0,row:0}, ext:{width:56,height:56} });
+    }catch(e){ /* logo is decorative — export is still valid without it */ }
+  }
 
   ws.mergeCells(1,2,1,colCount);
   ws.getCell(1,2).value = 'Þvottafélagið';
@@ -2265,12 +2272,55 @@ async function exportVolumeExcel(){
       noteRow.getCell(1).font = { italic:true, size:9, color:{argb:'FF666666'} };
     }
   }
+}
+
+/* ---- Volume export as a real .xlsx workbook (not flat CSV) so it can carry
+   the laundry logo, a styled header, and the selected date range —
+   matching the hand-built "Delivery report" sheet staff already circulate.
+   When a specific client is selected this writes one sheet; when 'all
+   clients' is selected it writes one sheet per client that had any volume
+   in the range, so the workbook stays organized by client instead of
+   mixing everyone's items into a single aggregate table. Opening this in
+   Excel and using File > Save As / Print > Save as PDF is the path to a
+   PDF copy — no PDF generation is done in-app. ---- */
+async function exportVolumeExcel(){
+  const wb = new ExcelJS.Workbook();
+  let logoBuf = null;
+  try{
+    const resp = await fetch('icons/icon-192.png');
+    logoBuf = await resp.arrayBuffer();
+  }catch(e){ /* logo is decorative — export is still valid without it */ }
+
+  const usedNames = new Set();
+  let anySheet = false;
+
+  if(volumeClientFilter === 'all'){
+    const allClients = db.users.filter(u=>u.role==='client').sort((a,b)=>a.name.localeCompare(b.name));
+    allClients.forEach(client=>{
+      const r = computeVolumeReport(volumeStart, volumeEnd, client.id);
+      if(r.activeProductIds.length===0) return;
+      anySheet = true;
+      const ws = wb.addWorksheet(sanitizeSheetName(client.name, usedNames));
+      fillVolumeSheet(wb, ws, client, r, logoBuf);
+    });
+  } else {
+    const r = computeVolumeReport(volumeStart, volumeEnd, volumeClientFilter);
+    const client = db.users.find(u=>u.id===volumeClientFilter);
+    if(r.activeProductIds.length>0){
+      anySheet = true;
+      const ws = wb.addWorksheet(sanitizeSheetName(client ? client.name : 'Volume', usedNames));
+      fillVolumeSheet(wb, ws, client, r, logoBuf);
+    }
+  }
+
+  if(!anySheet){ toast(t('rep_no_data')); return; }
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const clientSlug = client ? client.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') : 'todos';
+  const singleClient = volumeClientFilter!=='all' ? db.users.find(u=>u.id===volumeClientFilter) : null;
+  const clientSlug = volumeClientFilter==='all' ? 'todos' : (singleClient ? singleClient.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') : 'todos');
   a.href = url; a.download = `thvottafelagid-volumen_${clientSlug}_${volumeStart}_${volumeEnd}.xlsx`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
@@ -2410,7 +2460,7 @@ function renderDesktopVolumeReport(){
           </tfoot>
         </table>
       </div>
-      ${volumeClientFilter!=='all' ? `<button class="add-item" id="vol-export">${t('rep_volume_export')}</button>` : ''}
+      <button class="add-item" id="vol-export">${t('rep_volume_export')}</button>
       `}
     </div>
     ${volumeClientFilter!=='all' ? renderBillingSummary() : ''}
