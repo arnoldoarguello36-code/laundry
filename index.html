@@ -1425,7 +1425,7 @@ function renderDesktopClienteView(){
   return `
   <div class="ds-shell">
     <aside class="ds-sidebar">
-      <div class="ds-brand">Þvottafélagið<span class="ds-brand-sub">${t('my_orders')}</span></div>
+      ${renderBrandLogo(t('my_orders'))}
       <div class="ds-sidebar-foot">${t('signed_in_as')} ${user ? esc(user.name) : ''}<br><button id="btn-logout">↩ ${t('logout')}</button></div>
     </aside>
     <main class="ds-main">
