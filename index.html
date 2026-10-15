@@ -2827,7 +2827,21 @@ function bindEvents(){
       // address + kennitala are mandatory as of 2026-10-15 (sent as real
       // values, never undefined) — previously address alone was optional and
       // omitted when blank; see 20261015120000_add_client_kennitala_mandatory_address.sql.
-      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang, address, kennitala } } });
+      //
+      // emailRedirectTo is required here (2026-10-15 fix): without it, the
+      // "confirm your signup" email falls back to the Supabase project's
+      // dashboard-configured Site URL. GitHub Pages serves this app at a
+      // project subpath (https://<user>.github.io/laundry/), not domain
+      // root, so if Site URL is set to the bare root, the confirmation
+      // link 404s with GitHub's own "There isn't a GitHub Pages site here"
+      // page instead of opening the app. The other three auth-email call
+      // sites in this file (resetPasswordForEmail) already pass this exact
+      // redirectTo and don't hit the bug — this was the one gap. Still
+      // requires the URL (or a github.io/** wildcard) to be present in the
+      // Supabase dashboard's Authentication > URL Configuration > Redirect
+      // URLs allow-list, or Supabase silently ignores it and falls back to
+      // Site URL anyway.
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang, address, kennitala }, emailRedirectTo: window.location.origin + window.location.pathname } });
       if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
       if(data.session){
         const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
