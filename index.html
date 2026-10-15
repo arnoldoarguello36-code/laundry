@@ -438,7 +438,9 @@ const I18N = {
     comments_opt:"Comments (optional)", comments_ph:"E.g. no starch, stain on collar, etc.", other_ph:"Describe the item...",
     opt_urgent:"Urgent / express service", opt_delivery:"Home delivery", opt_pickup:"Pickup at home (collect dirty laundry)",
     pickup_address_label:"Pickup/delivery address", pickup_address_ph:"Street, number, floor/apt...", err_pickup_address:"Please enter a pickup address", pickup_address_note:"Address", pickup_address_on_file:"Address on file",
-    reg_address_label:"Address (optional)", reg_address_ph:"Street, number, floor/apt...", reg_address_note:"We'll use this to prefill your pickup/delivery address on future orders. You can change it any time.",
+    reg_address_label:"Address", reg_address_ph:"Street, number, floor/apt...", reg_address_note:"We'll use this to prefill your pickup/delivery address on future orders. You can change it any time.", err_address_required:"Please enter an address",
+    kennitala_label:"Kennitala (ID number)", kennitala_ph:"123456-7890", err_kennitala_required:"Please enter a kennitala", err_kennitala_invalid:"Kennitala must be 10 digits",
+    export_lang_title:"Export language", export_lang_sub:"Which language should the exported file use?",
     pickup_section:"Home pickup (optional)",
     home_service_locked_note:"This client always gets home pickup & delivery — staff can't change it here.",
     return_method:"How will you get your order back?", opt_return_store:"I'll pick it up at the store", opt_return_delivery:"Home delivery",
@@ -597,7 +599,9 @@ const I18N = {
     comments_opt:"Athugasemdir (valfrjálst)", comments_ph:"T.d. ekkert sterkju, blettur á kraga, o.s.frv.", other_ph:"Lýstu hlutnum...",
     opt_urgent:"Hraðþjónusta", opt_delivery:"Heimsending", opt_pickup:"Sækja óhrein föt heim",
     pickup_address_label:"Heimilisfang fyrir sókn/heimsendingu", pickup_address_ph:"Gata, númer, hæð/íbúð...", err_pickup_address:"Vinsamlegast sláðu inn heimilisfang", pickup_address_note:"Heimilisfang", pickup_address_on_file:"Heimilisfang á skrá",
-    reg_address_label:"Heimilisfang (valfrjálst)", reg_address_ph:"Gata, númer, hæð/íbúð...", reg_address_note:"Við notum þetta til að forfylla heimilisfang fyrir sókn/heimsendingu í framtíðarpöntunum. Þú getur breytt því hvenær sem er.",
+    reg_address_label:"Heimilisfang", reg_address_ph:"Gata, númer, hæð/íbúð...", reg_address_note:"Við notum þetta til að forfylla heimilisfang fyrir sókn/heimsendingu í framtíðarpöntunum. Þú getur breytt því hvenær sem er.", err_address_required:"Vinsamlegast sláðu inn heimilisfang",
+    kennitala_label:"Kennitala", kennitala_ph:"123456-7890", err_kennitala_required:"Vinsamlegast sláðu inn kennitölu", err_kennitala_invalid:"Kennitala þarf að vera 10 tölustafir",
+    export_lang_title:"Tungumál útflutnings", export_lang_sub:"Á hvaða tungumáli á útflutta skjalið að vera?",
     pickup_section:"Sækja heim (valfrjálst)",
     home_service_locked_note:"Þessi viðskiptavinur er alltaf með sókn og heimsendingu — starfsfólk getur ekki breytt því hér.",
     return_method:"Hvernig færðu pöntunina til baka?", opt_return_store:"Ég sæki hana í verslun", opt_return_delivery:"Heimsending",
@@ -909,6 +913,11 @@ function fmtISK(n){ return Math.round(n).toLocaleString(lang==='is'?'is-IS':'en-
 // !it.desc.trim() checks, price computation) and for re-serializing back to
 // Supabase unmodified.
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Loose kennitala check: 10 digits once separators are stripped. Not a real
+// checksum validation (Iceland's kennitala has one) — deliberately simple
+// so we never reject a real, valid kennitala due to a checksum bug on our
+// end. Catches typos/garbage input, which is the actual goal here.
+function isValidKennitala(k){ return /^\d{10}$/.test(String(k||'').replace(/[^0-9]/g,'')); }
 // Shared sidebar brand/logo block for the desktop staff and admin shells
 // (renderDesktopStaffShell()/renderDesktopAdminShell()) — the two were
 // byte-for-byte identical except for the panel sub-label, so this pulls the
@@ -954,7 +963,7 @@ let db = {
 };
 
 function mapProfile(p){
-  return { id:p.id, name:p.name, email:p.email, phone:p.phone, address:p.address||'', registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, forceHomeService: !!p.force_home_service, role: p.role, preferredLang: p.preferred_lang };
+  return { id:p.id, name:p.name, email:p.email, phone:p.phone, address:p.address||'', kennitala:p.kennitala||'', registeredAt: p.registered_at ? new Date(p.registered_at).getTime() : Date.now(), notificationsEnabled: p.notifications_enabled !== false, isContract: !!p.is_contract, forceHomeService: !!p.force_home_service, role: p.role, preferredLang: p.preferred_lang };
 }
 // HSN and Hvammur (2026-09-22): contract clients whose profiles.force_home_service
 // is true always use home pickup + home delivery on every order — staff can't
@@ -1174,6 +1183,10 @@ let quotePriceDrafts = {};
 let volumeStart = (()=>{ const d=new Date(); d.setDate(d.getDate()-6); return d.toISOString().slice(0,10); })();
 let volumeEnd = todayISO();
 let volumeClientFilter = 'all'; // 'all' | a client (profile) id
+// Gates the small "Icelandic or English?" prompt shown before the volume
+// Excel export actually runs (runVolumeExport below) — a tiny standalone
+// overlay (not the order sheet) so it doesn't entangle with sheetMode.
+let exportLangPromptOpen = false;
 
 function toast(msg){
   const el = document.getElementById('toast');
@@ -1205,8 +1218,8 @@ function render(){
   if(authScreen === 'recovery'){ app.innerHTML = renderTopbar() + renderRecoveryScreen(); bindEvents(); return; }
   if(!session.role){ app.innerHTML = isDesktop() ? renderDesktopAuth() : renderTopbar() + renderAuth(); }
   else if(session.role === 'client'){ app.innerHTML = isDesktop() ? renderDesktopClienteView() + renderSheet() : renderTopbar() + renderClienteView() + renderSheet(); }
-  else if(session.role === 'staff'){ app.innerHTML = isDesktop() ? renderDesktopStaffShell() + renderSheet() : renderTopbar() + renderStaffView() + renderSheet(); }
-  else { app.innerHTML = isDesktop() ? renderDesktopAdminShell() + renderSheet() : renderTopbar() + renderAdminView() + renderSheet(); }
+  else if(session.role === 'staff'){ app.innerHTML = isDesktop() ? renderDesktopStaffShell() + renderSheet() + renderExportLangPrompt() : renderTopbar() + renderStaffView() + renderSheet() + renderExportLangPrompt(); }
+  else { app.innerHTML = isDesktop() ? renderDesktopAdminShell() + renderSheet() + renderExportLangPrompt() : renderTopbar() + renderAdminView() + renderSheet() + renderExportLangPrompt(); }
   bindEvents();
 }
 function renderLangSwitch(){
@@ -1301,10 +1314,11 @@ function authFieldsHtml(){
     <div class="field"><label>${t('email')}</label><input id="reg-email" type="email" placeholder="jon@example.is"></div>
     <div class="field"><label>${t('phone')}</label><input id="reg-phone" type="tel" placeholder="555-0199"></div>
     <div class="field">
-      <label>${t('reg_address_label')}</label>
+      <label>${t('reg_address_label')} *</label>
       <input id="reg-address" placeholder="${t('reg_address_ph')}">
       <div class="item-price-hint">${t('reg_address_note')}</div>
     </div>
+    <div class="field"><label>${t('kennitala_label')} *</label><input id="reg-kennitala" placeholder="${t('kennitala_ph')}"></div>
     <div class="field"><label>${t('pass')}</label><input id="reg-pass" type="password" placeholder="${t('create_pass')}"></div>
     <div class="field">
       <label>${t('preferred_lang_label')}</label>
@@ -1508,6 +1522,27 @@ function fmtFecha(iso){ if(!iso) return '—'; const d = new Date(iso+'T00:00:00
 function fmtDateTime(ts){ const d = new Date(ts); const l = lang==='is'?'is-IS':'en-GB'; return d.toLocaleDateString(l,{day:'2-digit',month:'short'}) + ' · ' + d.toLocaleTimeString(l,{hour:'2-digit',minute:'2-digit'}); }
 
 /* ---- Sheet: nueva orden (cliente) o registro manual (staff/admin) ---- */
+/* ---- Tiny standalone overlay asking IS/EN before the volume Excel export
+   runs (runVolumeExport below). Reuses the existing .sheet/.sheet-backdrop
+   look so it's visually consistent without adding new CSS. Kept separate
+   from renderSheet()/sheetMode on purpose — it has nothing to do with order
+   drafts and piggybacking on sheetMode would entangle two unrelated flows. ---- */
+function renderExportLangPrompt(){
+  if(!exportLangPromptOpen) return '';
+  return `
+  <div class="sheet-backdrop open" id="export-lang-backdrop"></div>
+  <div class="sheet open" id="export-lang-sheet">
+    <div class="sheet-handle"></div>
+    <h2>${t('export_lang_title')}</h2>
+    <p class="sub">${t('export_lang_sub')}</p>
+    <div class="staff-actions">
+      <button style="background:var(--teal)" id="export-lang-is">${t('lang_option_is')}</button>
+      <button style="background:var(--ink)" id="export-lang-en">${t('lang_option_en')}</button>
+    </div>
+    <div class="switch-link"><a id="export-lang-cancel">${t('cancel')}</a></div>
+  </div>`;
+}
+
 function renderSheet(){
   if(orderDraftItems.length===0) orderDraftItems=[{tipo:activeProducts()[0].key, cant:1, desc:''}];
   const totals = computeOrderTotals(orderDraftItems, orderDraftMods);
@@ -1520,7 +1555,15 @@ function renderSheet(){
   // selectable) without lumping it in with isManual's client-picker block.
   const isEdit = sheetMode==='edit';
   const isManualLike = isManual || isEdit;
-  const hidePrices = session.role==='staff';
+  // Prices are hidden from the order-creation sheet as of 2026-10-15, except
+  // for admin: admin still needs to see per-item price hints, fee badges,
+  // and the totals preview (confirmed 2026-10-15 — "leave the prices for the
+  // admin"). Staff and clients are quantity-only now. showFees additionally
+  // strips the delivery/pickup fee amounts down to just the checkbox for the
+  // client's own self-service flow (session.role==='client'), since
+  // isManual/isEdit are only ever reachable by a staff/admin session.
+  const hidePrices = session.role !== 'admin';
+  const showFees = session.role !== 'client';
   const editingOrder = isEdit ? db.orders.find(o=>o.id===editingOrderId) : null;
   // HSN/Hvammur-style locked clients: return-method/pickup are forced and
   // disabled below, not just pre-checked, per the "staff cannot move it"
@@ -1589,12 +1632,12 @@ function renderSheet(){
     ${homeServiceLocked ? `<div class="item-price-hint">🔒 ${t('home_service_locked_note')}</div>` : ''}
     <label>${t('return_method')}</label>
     <label class="checkbox-row"><input type="radio" name="return-method" value="store" ${orderDraftMods.returnMethod==='store'?'checked':''} ${homeServiceLocked?'disabled':''}> ${t('opt_return_store')} <span class="fee">${lang==='is'?'ókeypis':'free'}</span></label>
-    <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${(!db.settings.deliveryEnabled||homeServiceLocked)?'disabled':''}> ${t('opt_return_delivery')} <span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span></label>
+    <label class="checkbox-row"><input type="radio" name="return-method" value="delivery" ${orderDraftMods.returnMethod==='delivery'?'checked':''} ${(!db.settings.deliveryEnabled||homeServiceLocked)?'disabled':''}> ${t('opt_return_delivery')} ${showFees ? `<span class="fee">${db.settings.deliveryEnabled ? '+'+fmtISK(db.settings.deliveryFee) : t('service_disabled')}</span>` : ''}</label>
 
     ${db.settings.pickupEnabled ? `
     <div class="pickup-section">
       <label>${t('pickup_section')}</label>
-      <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''} ${homeServiceLocked?'disabled':''}> ${t('opt_pickup')} <span class="fee">+${fmtISK(db.settings.pickupFee)}</span></label>
+      <label class="checkbox-row"><input type="checkbox" id="orden-pickup" ${orderDraftMods.pickup?'checked':''} ${homeServiceLocked?'disabled':''}> ${t('opt_pickup')} ${showFees ? `<span class="fee">+${fmtISK(db.settings.pickupFee)}</span>` : ''}</label>
     </div>` : ''}
     ${
       // Manual entry (staff/walk-in) deliberately skips the free-text address
@@ -1833,7 +1876,8 @@ function clientAddFormHtml(){
       <div class="field"><label>${t('email')}</label><input id="cf-email" type="email" placeholder="jon@example.is"></div>
     </div>
     <div class="field"><label>${t('phone')}</label><input id="cf-phone" type="tel" placeholder="${t('client_phone_ph')}"></div>
-    <div class="field"><label>${t('reg_address_label')}</label><input id="cf-address" placeholder="${t('reg_address_ph')}"></div>
+    <div class="field"><label>${t('reg_address_label')} *</label><input id="cf-address" placeholder="${t('reg_address_ph')}"></div>
+    <div class="field"><label>${t('kennitala_label')} *</label><input id="cf-kennitala" placeholder="${t('kennitala_ph')}"></div>
     <div class="item-price-hint" id="cf-email-note" style="margin-bottom:10px;">${t('client_setup_email_note')}</div>
     <label class="checkbox-row"><input type="checkbox" id="cf-skip-email"> ${t('cf_skip_email_label')}</label>
     <div class="item-price-hint" id="cf-skip-email-note" style="margin-bottom:10px;display:none;">${t('cf_skip_email_note')}</div>
@@ -1853,6 +1897,7 @@ function clientEditFormHtml(u){
     </div>
     <div class="field"><label>${t('phone')}</label><input id="ce-phone" type="tel" value="${esc(u.phone)}"></div>
     <div class="field"><label>${t('reg_address_label')}</label><input id="ce-address" value="${esc(u.address||'')}" placeholder="${t('reg_address_ph')}"></div>
+    <div class="field"><label>${t('kennitala_label')}</label><input id="ce-kennitala" value="${esc(u.kennitala||'')}" placeholder="${t('kennitala_ph')}"></div>
     <label class="checkbox-row"><input type="checkbox" id="ce-notifications" ${u.notificationsEnabled!==false?'checked':''}> ${t('notifications_enabled')}</label>
     <div class="item-price-hint" style="margin-bottom:10px;">${t('notifications_off_hint')}</div>
     <label class="checkbox-row"><input type="checkbox" id="ce-contract" ${u.isContract?'checked':''}> ${t('contract_client')}</label>
@@ -2185,6 +2230,16 @@ function fillVolumeSheet(wb, ws, client, r, logoBuf){
   ws.getCell(3,2).value = `${fmtFullDate(volumeStart)} \u2013 ${fmtFullDate(volumeEnd)}`;
   ws.getCell(3,2).font = { size:10, color:{argb:'FF666666'} };
 
+  // Client details header (2026-10-15 request): name is already row 2;
+  // kennitala goes right under the date range so every export — single
+  // client or the 'all clients' per-sheet loop — carries both identifiers
+  // without the reader having to cross-reference another sheet.
+  if(client){
+    ws.mergeCells(4,2,4,colCount);
+    ws.getCell(4,2).value = `${t('kennitala_label')}: ${client.kennitala || '—'}`;
+    ws.getCell(4,2).font = { size:10, color:{argb:'FF666666'} };
+  }
+
   const headerRow = ws.getRow(5);
   headerRow.getCell(1).value = t('rep_volume_day');
   r.activeProductIds.forEach((id,i)=> headerRow.getCell(2+i).value = productLabel(id));
@@ -2195,7 +2250,10 @@ function fillVolumeSheet(wb, ws, client, r, logoBuf){
   });
 
   let rowNum = 6;
-  r.days.forEach(day=>{
+  // 2026-10-15 request: only days with at least one delivery show up in the
+  // client's sheet — a day with no orders at all (day.values is {}) is
+  // skipped rather than printed as an all-zero row.
+  r.days.filter(day=>Object.keys(day.values).length>0).forEach(day=>{
     const row = ws.getRow(rowNum++);
     row.getCell(1).value = fmtFullDate(day.date);
     r.activeProductIds.forEach((id,i)=> row.getCell(2+i).value = day.values[id] || 0);
@@ -2320,10 +2378,36 @@ async function exportVolumeExcel(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const singleClient = volumeClientFilter!=='all' ? db.users.find(u=>u.id===volumeClientFilter) : null;
-  const clientSlug = volumeClientFilter==='all' ? 'todos' : (singleClient ? singleClient.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') : 'todos');
-  a.href = url; a.download = `thvottafelagid-volumen_${clientSlug}_${volumeStart}_${volumeEnd}.xlsx`;
+  // 2026-10-15 filename format: tvottafelagid_<client-or-all-clients>_<dd-mm>_<dd-mm>_<year>.
+  // dd-mm (no year) on each boundary date, with a single trailing year —
+  // matches the hand-built report naming staff already use instead of
+  // repeating the year twice via the full ISO dates.
+  const clientSlug = volumeClientFilter==='all' ? 'all-clients' : (singleClient ? singleClient.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') : 'all-clients');
+  const shortDate = (iso)=>{ const [y,m,d] = iso.split('-'); return `${d}-${m}`; };
+  const exportYear = volumeStart.split('-')[0];
+  a.href = url; a.download = `tvottafelagid_${clientSlug}_${shortDate(volumeStart)}_${shortDate(volumeEnd)}_${exportYear}.xlsx`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Wraps exportVolumeExcel so the file's language (Icelandic or English) is
+// whatever the user picked in the export-lang prompt, independent of the
+// UI's own current language. t()/fmtFullDate inside fillVolumeSheet read
+// the module-level `lang` var, so the simplest way to drive the export in a
+// different language than the UI is currently showing is to swap `lang`
+// for the duration of the export and restore it right after — no re-render
+// happens in between, so the user's own screen never flickers into the
+// other language.
+async function runVolumeExport(chosenLang){
+  const prevLang = lang;
+  lang = chosenLang;
+  try{
+    await exportVolumeExcel();
+  } finally {
+    lang = prevLang;
+    exportLangPromptOpen = false;
+    render();
+  }
 }
 
 function renderReports(){
@@ -2729,17 +2813,21 @@ function bindEvents(){
     const phone = document.getElementById('reg-phone').value.trim();
     const addressEl = document.getElementById('reg-address');
     const address = addressEl ? addressEl.value.trim() : '';
+    const kennitalaEl = document.getElementById('reg-kennitala');
+    const kennitala = kennitalaEl ? kennitalaEl.value.trim() : '';
     const pass = document.getElementById('reg-pass').value.trim();
     const preferredLangEl = document.getElementById('reg-preferred-lang');
     const preferredLang = preferredLangEl ? preferredLangEl.value : 'is';
     if(!name || !email || !phone || !pass){ toast(t('err_fill_all')); return; }
+    if(!address){ toast(t('err_address_required')); return; }
+    if(!kennitala){ toast(t('err_kennitala_required')); return; }
+    if(!isValidKennitala(kennitala)){ toast(t('err_kennitala_invalid')); return; }
     if(pass.length < 6){ toast(t('err_password_short')); return; }
     try{
-      // address is optional — omitted (undefined) rather than sent as '' when
-      // blank so raw_user_meta_data ->> 'address' in handle_new_user() reads
-      // as null, matching the "nullable, not empty string" convention the
-      // rest of profiles.* already follows.
-      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang, address: address || undefined } } });
+      // address + kennitala are mandatory as of 2026-10-15 (sent as real
+      // values, never undefined) — previously address alone was optional and
+      // omitted when blank; see 20261015120000_add_client_kennitala_mandatory_address.sql.
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone, preferred_lang: preferredLang, address, kennitala } } });
       if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
       if(data.session){
         const { data: profile } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
@@ -3017,7 +3105,11 @@ function bindEvents(){
   const volStart = document.getElementById('vol-start'); if(volStart) volStart.onchange = (e)=>{ volumeStart=e.target.value; render(); };
   const volEnd = document.getElementById('vol-end'); if(volEnd) volEnd.onchange = (e)=>{ volumeEnd=e.target.value; render(); };
   const volClient = document.getElementById('vol-client'); if(volClient) volClient.onchange = (e)=>{ volumeClientFilter=e.target.value; render(); };
-  const volExport = document.getElementById('vol-export'); if(volExport) volExport.onclick = exportVolumeExcel;
+  const volExport = document.getElementById('vol-export'); if(volExport) volExport.onclick = ()=>{ exportLangPromptOpen=true; render(); };
+  const exportLangIs = document.getElementById('export-lang-is'); if(exportLangIs) exportLangIs.onclick = ()=> runVolumeExport('is');
+  const exportLangEn = document.getElementById('export-lang-en'); if(exportLangEn) exportLangEn.onclick = ()=> runVolumeExport('en');
+  const exportLangCancel = document.getElementById('export-lang-cancel'); if(exportLangCancel) exportLangCancel.onclick = ()=>{ exportLangPromptOpen=false; render(); };
+  const exportLangBackdrop = document.getElementById('export-lang-backdrop'); if(exportLangBackdrop) exportLangBackdrop.onclick = ()=>{ exportLangPromptOpen=false; render(); };
   app.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{ staffFilter=b.dataset.filter; staffQuickFilter=null; render(); });
   app.querySelectorAll('[data-view-client]').forEach(b=>b.onclick=()=>{ staffClientFilter=b.dataset.viewClient; staffFilter='todos'; staffQuickFilter=null; if(session.role==='staff') staffTab='orders'; else adminTab='orders'; render(); });
 
@@ -3036,11 +3128,16 @@ function bindEvents(){
     const email = document.getElementById('cf-email').value.trim().toLowerCase();
     const phone = document.getElementById('cf-phone').value.trim();
     const address = document.getElementById('cf-address').value.trim();
+    const kennitala = document.getElementById('cf-kennitala').value.trim();
     const contractEl = document.getElementById('cf-contract');
     const skipEmail = cfSkipEmail && cfSkipEmail.checked;
     // Email is only mandatory on the normal (emailed) path — the no-email
-    // path (admin-create-client) accepts a blank email on purpose.
+    // path (admin-create-client) accepts a blank email on purpose. address
+    // + kennitala are mandatory on both paths as of 2026-10-15.
     if(!name || !phone || (!skipEmail && !email)){ toast(t('err_fill_all')); return; }
+    if(!address){ toast(t('err_address_required')); return; }
+    if(!kennitala){ toast(t('err_kennitala_required')); return; }
+    if(!isValidKennitala(kennitala)){ toast(t('err_kennitala_invalid')); return; }
     if(skipEmail){
       // No-email path: routed through the admin-create-client Edge Function
       // (service-role, forwards this staff/admin session's JWT for its own
@@ -3048,7 +3145,7 @@ function bindEvents(){
       // set-password email fires — see that function's header comment.
       try{
         const { data, error } = await sb.functions.invoke('admin-create-client', {
-          body: { name, phone, email: email || undefined, address: address || undefined, is_contract: !!(contractEl && contractEl.checked) }
+          body: { name, phone, email: email || undefined, address, kennitala, is_contract: !!(contractEl && contractEl.checked) }
         });
         if(error){ console.error('admin-create-client', error); toast(t('err_generic')); return; }
         if(data && data.error){ toast(/already|exists|registered/i.test(data.error) ? t('err_email_exists') : t('err_generic')); return; }
@@ -3062,7 +3159,7 @@ function bindEvents(){
       // below sends them a link to set their own. sbAnon keeps this signUp from
       // clobbering the staff/admin caller's own session.
       const randomPass = Math.random().toString(36).slice(-10) + 'Aa1!';
-      const { data, error } = await sbAnon.auth.signUp({ email, password: randomPass, options: { data: { name, phone, address: address || undefined } } });
+      const { data, error } = await sbAnon.auth.signUp({ email, password: randomPass, options: { data: { name, phone, address, kennitala } } });
       if(error){ toast(error.message && /already/i.test(error.message) ? t('err_email_exists') : t('err_generic')); return; }
       if(contractEl && contractEl.checked){
         const { error: updErr } = await sb.from('profiles').update({ is_contract: true }).eq('id', data.user.id);
@@ -3083,10 +3180,15 @@ function bindEvents(){
     const email = document.getElementById('ce-email').value.trim().toLowerCase();
     const phone = document.getElementById('ce-phone').value.trim();
     const address = document.getElementById('ce-address').value.trim();
+    const kennitala = document.getElementById('ce-kennitala').value.trim();
     if(!name || !email || !phone){ toast(t('err_fill_all')); return; }
+    // kennitala stays optional here (not at registration) so editing an
+    // unrelated field on a legacy client who predates this requirement never
+    // gets blocked — but if staff did type something, it must be valid.
+    if(kennitala && !isValidKennitala(kennitala)){ toast(t('err_kennitala_invalid')); return; }
     try{
       const { error } = await sb.from('profiles').update({
-        name, email, phone, address: address || null,
+        name, email, phone, address: address || null, kennitala: kennitala || null,
         notifications_enabled: document.getElementById('ce-notifications').checked,
         is_contract: document.getElementById('ce-contract').checked
       }).eq('id', u.id);

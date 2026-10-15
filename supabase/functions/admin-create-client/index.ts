@@ -47,6 +47,7 @@ type Payload = {
   phone: string;
   email?: string;
   address?: string;
+  kennitala?: string;
   is_contract?: boolean;
 };
 
@@ -114,14 +115,19 @@ Deno.serve(async (req: Request) => {
   const name = (payload.name ?? "").trim();
   const phone = (payload.phone ?? "").trim();
   const address = (payload.address ?? "").trim();
+  const kennitala = (payload.kennitala ?? "").trim();
   const suppliedEmail = (payload.email ?? "").trim().toLowerCase();
   // is_contract is admin-only, same as the front-end gating in
   // clientAddFormHtml — re-checked here since a staff-role caller could
   // otherwise send is_contract:true directly to this endpoint.
   const isContract = callerProfile.role === "admin" && !!payload.is_contract;
 
-  if (!name || !phone) {
-    return jsonResponse({ error: "name and phone are required" }, 400);
+  // address + kennitala are mandatory as of 2026-10-15 (client registration
+  // requirement) — enforced here too, not just in index.html's form, since
+  // this Edge Function is a second, directly-callable entry point into
+  // client creation.
+  if (!name || !phone || !address || !kennitala) {
+    return jsonResponse({ error: "name, phone, address and kennitala are required" }, 400);
   }
 
   // No email on file: Supabase Auth still requires a syntactically valid,
@@ -138,7 +144,7 @@ Deno.serve(async (req: Request) => {
     email,
     password: randomPass,
     email_confirm: true, // pre-confirmed → GoTrue does not send a confirmation email
-    user_metadata: { name, phone, address: address || undefined },
+    user_metadata: { name, phone, address, kennitala },
   });
   if (createErr || !created?.user) {
     const msg = createErr?.message ?? "user creation failed";
