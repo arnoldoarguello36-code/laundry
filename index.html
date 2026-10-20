@@ -226,6 +226,9 @@
   .btn-sm{padding:9px 12px;font-size:12.5px;}
   .switch-link{font-size:13px;color:#4A5568;text-align:center;margin-top:6px;}
   .switch-link a{color:var(--teal-dark);font-weight:600;cursor:pointer;text-decoration:none;}
+  .morpho-credit{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:22px;opacity:.55;color:inherit;text-decoration:none;}
+  .morpho-credit img{width:13px;height:13px;}
+  .morpho-credit span{font-size:10.5px;color:#8a929e;letter-spacing:.02em;}
 
   .content{flex:1;padding:16px 18px 100px;overflow-y:auto;}
   .section-title{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:#8a929e;font-weight:700;margin:20px 0 10px;}
@@ -1304,6 +1307,9 @@ function authScreenMeta(){
   if(authScreen==='registro') return {eyebrow:t('first_time'), title:t('register_title'), sub:t('register_sub')};
   return {eyebrow:t('welcome_back'), title:t('login_title'), sub:t('login_sub')};
 }
+function morphoCreditHtml(){
+  return `<a class="morpho-credit" href="https://hellomorpho.com" target="_blank" rel="noopener"><img src="icons/morpho-logo.png" alt=""><span>Powered by Morpho Studios</span></a>`;
+}
 function authFieldsHtml(){
   if(authScreen==='forgot') return `
     <div class="field"><label>${t('email')}</label><input type="email" id="forgot-email" placeholder="anna.bjork@example.is"></div>
@@ -1342,6 +1348,7 @@ function renderAuth(){
   <div class="auth-screen">
     <div class="auth-hero">${m.eyebrow ? `<div class="eyebrow">${m.eyebrow}</div>` : ''}<h1>${m.title}</h1><p>${m.sub}</p></div>
     ${authFieldsHtml()}
+    ${morphoCreditHtml()}
   </div>`;
 }
 // Desktop split-screen login/register/forgot (T4) — brand/trust panel on the
@@ -1371,6 +1378,7 @@ function renderDesktopAuth(){
         <h1>${m.title}</h1>
         <p class="ds-form-sub">${m.sub}</p>
         ${authFieldsHtml()}
+        ${morphoCreditHtml()}
       </div>
     </div>
   </div>`;
