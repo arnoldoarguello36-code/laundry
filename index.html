@@ -424,7 +424,7 @@ const I18N = {
     tab_cliente:"Client", tab_staff:"Staff", tab_admin:"Admin",
     welcome_back:"Welcome back", login_title:"Sign in to your account",
     login_sub:"Track your garments and place new orders in seconds.",
-    phone:"Phone", pass:"Password", btn_login:"Sign in", btn_staff_login:"Sign in as staff", btn_admin_login:"Sign in as admin",
+    phone:"Phone", pass:"Password", btn_login:"Sign in",
     no_account:"Don't have an account?", signup:"Sign up", demo_hint:"Demo — use anna.bjork@example.is / 1234",
     first_time:"First time here", register_title:"Create your account",
     register_sub:"Register to place orders and track their status live.",
@@ -585,7 +585,7 @@ const I18N = {
     tab_cliente:"Viðskiptavinur", tab_staff:"Starfsfólk", tab_admin:"Stjórnandi",
     welcome_back:"Velkomin/n aftur", login_title:"Skráðu þig inn",
     login_sub:"Fylgstu með fötunum þínum og gerðu nýjar pantanir á sekúndum.",
-    phone:"Sími", pass:"Lykilorð", btn_login:"Skrá inn", btn_staff_login:"Skrá inn sem starfsmaður", btn_admin_login:"Skrá inn sem stjórnandi",
+    phone:"Sími", pass:"Lykilorð", btn_login:"Skrá inn",
     no_account:"Ertu ekki með aðgang?", signup:"Nýskrá", demo_hint:"Sýnishorn — notaðu anna.bjork@example.is / 1234",
     first_time:"Fyrsta heimsókn", register_title:"Stofnaðu aðgang",
     register_sub:"Skráðu þig til að gera pantanir og fylgjast með stöðu þeirra.",
@@ -1333,8 +1333,6 @@ function authFieldsHtml(){
     <div class="field"><label>${t('email')}</label><input type="email" id="login-email" placeholder="anna.bjork@example.is"></div>
     <div class="field"><label>${t('pass')}</label><input type="password" id="login-pass" placeholder="••••"></div>
     <button class="btn btn-primary" id="btn-login">${t('btn_login')}</button>
-    <button class="btn btn-teal" id="btn-staff-login">${t('btn_staff_login')}</button>
-    <button class="btn btn-clay" id="btn-admin-login">${t('btn_admin_login')}</button>
     <div class="switch-link">${t('no_account')} <a id="go-registro">${t('signup')}</a></div>
     <div class="switch-link" style="margin-top:-4px;"><a id="go-forgot">${t('forgot_password')}</a></div>`;
 }
@@ -2765,8 +2763,8 @@ function renderAdminPricing(){
 }
 
 /* ============ EVENTOS ============ */
-/* ---- shared login helper for the three login buttons ---- */
-async function attemptLogin(expectedRoles, targetViewMode, tabAssign){
+/* ---- single login button: role + landing view are derived from profile.role, not pre-selected ---- */
+async function attemptLogin(){
   const emailEl = document.getElementById('login-email');
   const passEl = document.getElementById('login-pass');
   const email = (emailEl?.value||'').trim().toLowerCase();
@@ -2777,10 +2775,12 @@ async function attemptLogin(expectedRoles, targetViewMode, tabAssign){
     if(error){ toast(t('err_email_pass')); return; }
     const { data: profile, error: profErr } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
     if(profErr || !profile){ await sb.auth.signOut(); toast(t('err_generic')); return; }
-    if(!expectedRoles.includes(profile.role)){ await sb.auth.signOut(); toast(t('err_role_mismatch')); return; }
+    const targetViewMode = ['client','staff','admin'].includes(profile.role) ? profile.role : null;
+    if(!targetViewMode){ await sb.auth.signOut(); toast(t('err_role_mismatch')); return; }
     session = { role: targetViewMode, userId: profile.id, actualRole: profile.role };
     viewMode = targetViewMode;
-    if(tabAssign) tabAssign();
+    if(targetViewMode==='staff') staffTab='today';
+    if(targetViewMode==='admin') adminTab='reports';
     await loadDataForSession();
     render();
   } catch(e){ console.error('attemptLogin', e); toast(t('err_generic')); }
@@ -2823,11 +2823,7 @@ function bindEvents(){
   };
 
   const btnLogin = document.getElementById('btn-login');
-  if(btnLogin) btnLogin.onclick = ()=> attemptLogin(['client'], 'client', null);
-  const btnStaffLogin = document.getElementById('btn-staff-login');
-  if(btnStaffLogin) btnStaffLogin.onclick = ()=> attemptLogin(['staff','admin'], 'staff', ()=>{ staffTab='today'; });
-  const btnAdminLogin = document.getElementById('btn-admin-login');
-  if(btnAdminLogin) btnAdminLogin.onclick = ()=> attemptLogin(['admin'], 'admin', ()=>{ adminTab='reports'; });
+  if(btnLogin) btnLogin.onclick = ()=> attemptLogin();
 
   const btnRegistro = document.getElementById('btn-registro');
   if(btnRegistro) btnRegistro.onclick = async ()=>{
