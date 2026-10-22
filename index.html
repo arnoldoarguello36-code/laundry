@@ -3229,6 +3229,23 @@ function bindEvents(){
     // gets blocked — but if staff did type something, it must be valid.
     if(kennitala && !isValidKennitala(kennitala)){ toast(t('err_kennitala_invalid')); return; }
     try{
+      // profiles.email is a denormalized display column — it is NOT what
+      // auth.users.email / login / resetPasswordForEmail actually check.
+      // Clients registered via the no-email path (admin-create-client) have
+      // a real Auth account pinned to a non-deliverable placeholder address;
+      // writing profiles.email alone here would "succeed" in the UI while
+      // leaving that client unable to log in or receive a reset link. So
+      // when the typed email actually differs from what's on file, sync
+      // auth.users.email first via the privileged admin-update-client-email
+      // function, and only then run the profiles update below.
+      const currentEmail = (u.email || '').toLowerCase();
+      if(email !== currentEmail){
+        const { data: emailData, error: emailError } = await sb.functions.invoke('admin-update-client-email', {
+          body: { client_id: u.id, email }
+        });
+        if(emailError){ console.error('admin-update-client-email', emailError); toast(t('err_generic')); return; }
+        if(emailData && emailData.error){ toast(/already|exists|registered/i.test(emailData.error) ? t('err_email_exists') : t('err_generic')); return; }
+      }
       const { error } = await sb.from('profiles').update({
         name, email, phone, address: address || null, kennitala: kennitala || null,
         notifications_enabled: document.getElementById('ce-notifications').checked,
